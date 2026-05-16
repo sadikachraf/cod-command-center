@@ -117,7 +117,7 @@ Click **Deploy**. Vercel runs `npm run build` automatically. Build time ~30s.
 ### Step 5 — Test production order API
 
 ```bash
-curl -X POST https://your-vercel-domain.vercel.app/api/orders \
+curl -X POST https://cod-command-center-three.vercel.app/api/orders \
   -H "Content-Type: application/json" \
   -d '{
     "landing_page_api_key": "YOUR_API_KEY_FROM_DASHBOARD",
@@ -166,7 +166,7 @@ Expected success response:
 ### Endpoint
 
 ```
-POST https://your-vercel-domain.vercel.app/api/orders
+POST https://cod-command-center-three.vercel.app/api/orders
 Content-Type: application/json
 ```
 
@@ -192,7 +192,7 @@ Content-Type: application/json
 ### JavaScript / fetch Example
 
 ```javascript
-fetch("https://your-vercel-domain.vercel.app/api/orders", {
+fetch("https://cod-command-center-three.vercel.app/api/orders", {
   method: "POST",
   headers: { "Content-Type": "application/json" },
   body: JSON.stringify({
