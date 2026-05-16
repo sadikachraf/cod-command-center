@@ -31,10 +31,24 @@ const inputStyle = {
   color: 'var(--text-primary)',
 }
 
+type LPStats = {
+  total: number
+  new: number
+  confirmed: number
+  delivered: number
+  cancelled: number
+  value: number
+}
+
+function formatCurrency(value: number, currency = 'USD') {
+  return new Intl.NumberFormat('en-US', { style: 'currency', currency, maximumFractionDigits: 0 }).format(value)
+}
+
 export default function LandingPagesPage() {
   const supabase = createClient()
   const [pages, setPages] = useState<(LandingPage & { product: Pick<Product, 'product_name'> | null })[]>([])
   const [products, setProducts] = useState<Product[]>([])
+  const [stats, setStats] = useState<Record<string, LPStats>>({})
   const [loading, setLoading] = useState(true)
   const [modalOpen, setModalOpen] = useState(false)
   const [deleteId, setDeleteId] = useState<string | null>(null)
@@ -46,15 +60,34 @@ export default function LandingPagesPage() {
 
   const fetchData = useCallback(async () => {
     setLoading(true)
-    const [{ data: lps }, { data: prods }] = await Promise.all([
+    const [{ data: lps }, { data: prods }, { data: orders }] = await Promise.all([
       supabase
         .from('landing_pages')
         .select('*, product:products(product_name)')
         .order('created_at', { ascending: false }),
-      supabase.from('products').select('id, product_name, status').order('product_name'),
+      supabase.from('products').select('id, product_name, status, currency').order('product_name'),
+      supabase.from('orders').select('landing_page_id, status, order_value')
     ])
     setPages((lps ?? []) as typeof pages)
     setProducts((prods ?? []) as Product[])
+    
+    const s: Record<string, LPStats> = {}
+    if (orders) {
+      orders.forEach(o => {
+        if (!o.landing_page_id) return
+        if (!s[o.landing_page_id]) {
+          s[o.landing_page_id] = { total: 0, new: 0, confirmed: 0, delivered: 0, cancelled: 0, value: 0 }
+        }
+        s[o.landing_page_id].total++
+        s[o.landing_page_id].value += (o.order_value || 0)
+        if (o.status === 'New') s[o.landing_page_id].new++
+        if (o.status === 'Confirmed') s[o.landing_page_id].confirmed++
+        if (o.status === 'Delivered') s[o.landing_page_id].delivered++
+        if (o.status === 'Cancelled') s[o.landing_page_id].cancelled++
+      })
+    }
+    setStats(s)
+    
     setLoading(false)
   }, [supabase])
 
@@ -142,6 +175,10 @@ export default function LandingPagesPage() {
     </div>
   )
 
+  const getProductCurrency = (productId: string) => {
+    return products.find(p => p.id === productId)?.currency || 'USD'
+  }
+
   return (
     <div className="space-y-5 fade-in">
       <div className="flex items-center justify-between">
@@ -194,92 +231,94 @@ export default function LandingPagesPage() {
             <table className="w-full">
               <thead>
                 <tr style={{ borderBottom: '1px solid var(--border)' }}>
-                  {['Page Name', 'Product', 'Market', 'Offer', 'API Key', 'Status', 'Created', 'Actions'].map((h) => (
-                    <th key={h} className="px-4 py-3 text-left text-xs font-medium" style={{ color: 'var(--text-muted)' }}>
+                  {['Page Name', 'Product', 'API Key', 'Orders', 'New', 'Conf', 'Deliv', 'Canc', 'Revenue', 'Status', 'Actions'].map((h) => (
+                    <th key={h} className="px-4 py-3 text-left text-xs font-medium whitespace-nowrap" style={{ color: 'var(--text-muted)' }}>
                       {h}
                     </th>
                   ))}
                 </tr>
               </thead>
               <tbody>
-                {pages.map((lp, i) => (
-                  <tr
-                    key={lp.id}
-                    style={{ borderBottom: i < pages.length - 1 ? '1px solid var(--border)' : 'none' }}
-                    onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.02)' }}
-                    onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
-                  >
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium text-sm" style={{ color: 'var(--text-primary)' }}>
-                          {lp.page_name}
-                        </span>
-                        {lp.live_url && (
-                          <a href={lp.live_url} target="_blank" rel="noreferrer"
-                            style={{ color: 'var(--text-muted)' }}>
-                            <ExternalLink size={12} />
-                          </a>
+                {pages.map((lp, i) => {
+                  const s = stats[lp.id] || { total: 0, new: 0, confirmed: 0, delivered: 0, cancelled: 0, value: 0 }
+                  return (
+                    <tr
+                      key={lp.id}
+                      style={{ borderBottom: i < pages.length - 1 ? '1px solid var(--border)' : 'none' }}
+                      onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.02)' }}
+                      onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
+                    >
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium text-sm whitespace-nowrap" style={{ color: 'var(--text-primary)' }}>
+                            {lp.page_name}
+                          </span>
+                          {lp.live_url && (
+                            <a href={lp.live_url} target="_blank" rel="noreferrer"
+                              style={{ color: 'var(--text-muted)' }}>
+                              <ExternalLink size={12} />
+                            </a>
+                          )}
+                        </div>
+                        {lp.language && (
+                          <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                            {lp.language} {lp.market ? `· ${lp.market}` : ''}
+                          </span>
                         )}
-                      </div>
-                      {lp.language && (
-                        <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                          {lp.language}
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-xs" style={{ color: 'var(--text-secondary)' }}>
-                      {lp.product?.product_name ?? '—'}
-                    </td>
-                    <td className="px-4 py-3 text-xs" style={{ color: 'var(--text-secondary)' }}>
-                      {lp.market ?? '—'}
-                    </td>
-                    <td className="px-4 py-3 text-xs" style={{ color: 'var(--text-secondary)' }}>
-                      {lp.offer_name ?? '—'}
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-1.5">
-                        <code className="text-xs px-2 py-0.5 rounded" style={{
-                          background: 'var(--bg-primary)',
-                          color: 'var(--text-secondary)',
-                          border: '1px solid var(--border)',
-                          maxWidth: '130px',
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                          whiteSpace: 'nowrap',
-                          display: 'block',
-                        }}>
-                          {lp.api_key.substring(0, 16)}…
-                        </code>
-                        <button
-                          onClick={() => copyApiKey(lp.api_key, lp.id)}
-                          className="p-1 rounded transition-all"
-                          style={{ color: copiedId === lp.id ? '#34d399' : 'var(--text-muted)' }}
-                          title="Copy API key"
-                        >
-                          {copiedId === lp.id ? <CheckCheck size={14} /> : <Copy size={14} />}
-                        </button>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3">
-                      <StatusBadge status={lp.status} type="landing_page" />
-                    </td>
-                    <td className="px-4 py-3 text-xs" style={{ color: 'var(--text-muted)' }}>
-                      {format(new Date(lp.created_at), 'MMM d, yyyy')}
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-2">
-                        <button onClick={() => openEdit(lp)} className="p-1.5 rounded-lg"
-                          style={{ color: 'var(--text-secondary)', border: '1px solid var(--border)' }}>
-                          <Pencil size={13} />
-                        </button>
-                        <button onClick={() => setDeleteId(lp.id)} className="p-1.5 rounded-lg"
-                          style={{ color: 'var(--text-secondary)', border: '1px solid var(--border)' }}>
-                          <Trash2 size={13} />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                      </td>
+                      <td className="px-4 py-3 text-xs whitespace-nowrap" style={{ color: 'var(--text-secondary)' }}>
+                        {lp.product?.product_name ?? '—'}
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-1.5">
+                          <code className="text-xs px-2 py-0.5 rounded" style={{
+                            background: 'var(--bg-primary)',
+                            color: 'var(--text-secondary)',
+                            border: '1px solid var(--border)',
+                            maxWidth: '130px',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap',
+                            display: 'block',
+                          }}>
+                            {lp.api_key.substring(0, 16)}…
+                          </code>
+                          <button
+                            onClick={() => copyApiKey(lp.api_key, lp.id)}
+                            className="p-1 rounded transition-all"
+                            style={{ color: copiedId === lp.id ? '#34d399' : 'var(--text-muted)' }}
+                            title="Copy API key"
+                          >
+                            {copiedId === lp.id ? <CheckCheck size={14} /> : <Copy size={14} />}
+                          </button>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-xs font-semibold" style={{ color: 'var(--text-primary)' }}>{s.total}</td>
+                      <td className="px-4 py-3 text-xs" style={{ color: '#a78bfa' }}>{s.new}</td>
+                      <td className="px-4 py-3 text-xs" style={{ color: '#34d399' }}>{s.confirmed}</td>
+                      <td className="px-4 py-3 text-xs" style={{ color: '#fbbf24' }}>{s.delivered}</td>
+                      <td className="px-4 py-3 text-xs" style={{ color: '#9ca3af' }}>{s.cancelled}</td>
+                      <td className="px-4 py-3 text-xs font-medium whitespace-nowrap" style={{ color: 'var(--text-primary)' }}>
+                        {s.value > 0 ? formatCurrency(s.value, getProductCurrency(lp.product_id)) : '—'}
+                      </td>
+                      <td className="px-4 py-3">
+                        <StatusBadge status={lp.status} type="landing_page" />
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-2">
+                          <button onClick={() => openEdit(lp)} className="p-1.5 rounded-lg"
+                            style={{ color: 'var(--text-secondary)', border: '1px solid var(--border)' }}>
+                            <Pencil size={13} />
+                          </button>
+                          <button onClick={() => setDeleteId(lp.id)} className="p-1.5 rounded-lg"
+                            style={{ color: 'var(--text-secondary)', border: '1px solid var(--border)' }}>
+                            <Trash2 size={13} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                })}
               </tbody>
             </table>
           </div>

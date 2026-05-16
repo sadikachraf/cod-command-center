@@ -62,30 +62,28 @@ export default async function DashboardPage() {
   const newOrders = orders.filter((o) => o.status === 'New').length
   const confirmedOrders = orders.filter((o) => o.status === 'Confirmed').length
   const deliveredOrders = orders.filter((o) => o.status === 'Delivered').length
+  const cancelledOrders = orders.filter((o) => o.status === 'Cancelled').length
+  const returnedOrders = orders.filter((o) => o.status === 'Returned').length
 
-  // Top product today
-  const productCount: Record<string, { name: string; count: number }> = {}
-  orders.forEach((o) => {
+  // Orders by product today
+  const productCount = Object.values(orders.reduce((acc, o) => {
     if (o.product_id && o.product?.product_name) {
-      if (!productCount[o.product_id]) {
-        productCount[o.product_id] = { name: o.product.product_name, count: 0 }
-      }
-      productCount[o.product_id].count++
+      if (!acc[o.product_id]) acc[o.product_id] = { name: o.product.product_name, count: 0, revenue: 0, currency: o.currency }
+      acc[o.product_id].count++
+      acc[o.product_id].revenue += (o.order_value || 0)
     }
-  })
-  const topProduct = Object.values(productCount).sort((a, b) => b.count - a.count)[0]
+    return acc
+  }, {} as Record<string, { name: string; count: number; revenue: number; currency: string }>)).sort((a, b) => b.count - a.count)
 
-  // Top landing page today
-  const lpCount: Record<string, { name: string; count: number }> = {}
-  orders.forEach((o) => {
+  // Orders by landing page today
+  const lpCount = Object.values(orders.reduce((acc, o) => {
     if (o.landing_page_id && o.landing_page?.page_name) {
-      if (!lpCount[o.landing_page_id]) {
-        lpCount[o.landing_page_id] = { name: o.landing_page.page_name, count: 0 }
-      }
-      lpCount[o.landing_page_id].count++
+      if (!acc[o.landing_page_id]) acc[o.landing_page_id] = { name: o.landing_page.page_name, count: 0, revenue: 0, currency: o.currency }
+      acc[o.landing_page_id].count++
+      acc[o.landing_page_id].revenue += (o.order_value || 0)
     }
-  })
-  const topLP = Object.values(lpCount).sort((a, b) => b.count - a.count)[0]
+    return acc
+  }, {} as Record<string, { name: string; count: number; revenue: number; currency: string }>)).sort((a, b) => b.count - a.count)
 
   return (
     <div className="space-y-6 fade-in">
@@ -152,19 +150,57 @@ export default async function DashboardPage() {
           iconBg="rgba(245,158,11,0.12)"
         />
         <StatCard
-          label="Top Product"
-          value={topProduct?.name ?? '—'}
-          icon={<Star size={18} style={{ color: '#a78bfa' }} />}
-          iconBg="rgba(139,92,246,0.12)"
-          sub={topProduct ? `${topProduct.count} orders` : 'No orders yet'}
+          label="Returned"
+          value={returnedOrders}
+          icon={<Globe size={18} style={{ color: '#f87171' }} />}
+          iconBg="rgba(248,113,113,0.12)"
         />
         <StatCard
-          label="Top Landing Page"
-          value={topLP?.name ?? '—'}
-          icon={<Globe size={18} style={{ color: '#60a5fa' }} />}
-          iconBg="rgba(59,130,246,0.12)"
-          sub={topLP ? `${topLP.count} orders` : 'No orders yet'}
+          label="Cancelled"
+          value={cancelledOrders}
+          icon={<CheckCircle size={18} style={{ color: '#9ca3af' }} />}
+          iconBg="rgba(156,163,175,0.12)"
         />
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="rounded-xl p-5" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
+          <h3 className="text-sm font-semibold mb-4" style={{ color: 'var(--text-primary)' }}>Orders by Product Today</h3>
+          {productCount.length === 0 ? (
+            <p className="text-sm" style={{ color: 'var(--text-muted)' }}>No product data today.</p>
+          ) : (
+            <div className="space-y-3">
+              {productCount.map(p => (
+                <div key={p.name} className="flex items-center justify-between">
+                  <span className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>{p.name}</span>
+                  <div className="flex gap-4 text-sm">
+                    <span style={{ color: 'var(--text-secondary)' }}>{p.count} ord.</span>
+                    <span className="font-semibold" style={{ color: 'var(--text-primary)' }}>{formatCurrency(p.revenue, p.currency)}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="rounded-xl p-5" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
+          <h3 className="text-sm font-semibold mb-4" style={{ color: 'var(--text-primary)' }}>Orders by Landing Page Today</h3>
+          {lpCount.length === 0 ? (
+            <p className="text-sm" style={{ color: 'var(--text-muted)' }}>No landing page data today.</p>
+          ) : (
+            <div className="space-y-3">
+              {lpCount.map(lp => (
+                <div key={lp.name} className="flex items-center justify-between">
+                  <span className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>{lp.name}</span>
+                  <div className="flex gap-4 text-sm">
+                    <span style={{ color: 'var(--text-secondary)' }}>{lp.count} ord.</span>
+                    <span className="font-semibold" style={{ color: 'var(--text-primary)' }}>{formatCurrency(lp.revenue, lp.currency)}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Latest Orders — Client Component handles the interactive table rows */}

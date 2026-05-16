@@ -34,9 +34,23 @@ const inputStyle = {
   color: 'var(--text-primary)',
 }
 
+type ProductStats = {
+  total: number
+  new: number
+  confirmed: number
+  delivered: number
+  cancelled: number
+  value: number
+}
+
+function formatCurrency(value: number, currency = 'USD') {
+  return new Intl.NumberFormat('en-US', { style: 'currency', currency, maximumFractionDigits: 0 }).format(value)
+}
+
 export default function ProductsPage() {
   const supabase = createClient()
   const [products, setProducts] = useState<Product[]>([])
+  const [stats, setStats] = useState<Record<string, ProductStats>>({})
   const [loading, setLoading] = useState(true)
   const [modalOpen, setModalOpen] = useState(false)
   const [deleteId, setDeleteId] = useState<string | null>(null)
@@ -45,19 +59,37 @@ export default function ProductsPage() {
   const [saving, setSaving] = useState(false)
   const [formError, setFormError] = useState('')
 
-  const fetchProducts = useCallback(async () => {
+  const fetchProductsAndStats = useCallback(async () => {
     setLoading(true)
-    const { data } = await supabase
-      .from('products')
-      .select('*')
-      .order('created_at', { ascending: false })
-    setProducts((data as Product[]) ?? [])
+    const [{ data: prods }, { data: orders }] = await Promise.all([
+      supabase.from('products').select('*').order('created_at', { ascending: false }),
+      supabase.from('orders').select('product_id, status, order_value')
+    ])
+    
+    setProducts((prods as Product[]) ?? [])
+    
+    const s: Record<string, ProductStats> = {}
+    if (orders) {
+      orders.forEach(o => {
+        if (!o.product_id) return
+        if (!s[o.product_id]) {
+          s[o.product_id] = { total: 0, new: 0, confirmed: 0, delivered: 0, cancelled: 0, value: 0 }
+        }
+        s[o.product_id].total++
+        s[o.product_id].value += (o.order_value || 0)
+        if (o.status === 'New') s[o.product_id].new++
+        if (o.status === 'Confirmed') s[o.product_id].confirmed++
+        if (o.status === 'Delivered') s[o.product_id].delivered++
+        if (o.status === 'Cancelled') s[o.product_id].cancelled++
+      })
+    }
+    setStats(s)
     setLoading(false)
   }, [supabase])
 
   useEffect(() => {
-    fetchProducts()
-  }, [fetchProducts])
+    fetchProductsAndStats()
+  }, [fetchProductsAndStats])
 
   const openCreate = () => {
     setEditProduct(null)
@@ -117,7 +149,7 @@ export default function ProductsPage() {
       setFormError(error.message)
     } else {
       setModalOpen(false)
-      fetchProducts()
+      fetchProductsAndStats()
     }
     setSaving(false)
   }
@@ -126,7 +158,7 @@ export default function ProductsPage() {
     if (!deleteId) return
     await supabase.from('products').delete().eq('id', deleteId)
     setDeleteId(null)
-    fetchProducts()
+    fetchProductsAndStats()
   }
 
   const field = (
@@ -170,7 +202,7 @@ export default function ProductsPage() {
         </div>
         <div className="flex gap-2">
           <button
-            onClick={fetchProducts}
+            onClick={fetchProductsAndStats}
             className="p-2 rounded-lg transition-all"
             style={{
               color: 'var(--text-secondary)',
@@ -220,63 +252,64 @@ export default function ProductsPage() {
             <table className="w-full">
               <thead>
                 <tr style={{ borderBottom: '1px solid var(--border)' }}>
-                  {['Product', 'SKU', 'Country', 'Currency', 'Selling Price', 'Status', 'Created', 'Actions'].map((h) => (
-                    <th key={h} className="px-4 py-3 text-left text-xs font-medium" style={{ color: 'var(--text-muted)' }}>
+                  {['Product', 'SKU', 'Orders', 'New', 'Conf', 'Deliv', 'Canc', 'Revenue', 'Status', 'Actions'].map((h) => (
+                    <th key={h} className="px-4 py-3 text-left text-xs font-medium whitespace-nowrap" style={{ color: 'var(--text-muted)' }}>
                       {h}
                     </th>
                   ))}
                 </tr>
               </thead>
               <tbody>
-                {products.map((p, i) => (
-                  <tr
-                    key={p.id}
-                    className="transition-colors"
-                    style={{ borderBottom: i < products.length - 1 ? '1px solid var(--border)' : 'none' }}
-                    onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.02)' }}
-                    onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
-                  >
-                    <td className="px-4 py-3 font-medium text-sm" style={{ color: 'var(--text-primary)' }}>
-                      {p.product_name}
-                    </td>
-                    <td className="px-4 py-3 text-xs font-mono" style={{ color: 'var(--text-secondary)' }}>
-                      {p.sku ?? '—'}
-                    </td>
-                    <td className="px-4 py-3 text-xs" style={{ color: 'var(--text-secondary)' }}>{p.country ?? '—'}</td>
-                    <td className="px-4 py-3 text-xs" style={{ color: 'var(--text-secondary)' }}>{p.currency ?? '—'}</td>
-                    <td className="px-4 py-3 text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
-                      {p.selling_price != null
-                        ? `${p.selling_price.toFixed(2)} ${p.currency ?? ''}`
-                        : '—'}
-                    </td>
-                    <td className="px-4 py-3">
-                      <StatusBadge status={p.status} type="product" />
-                    </td>
-                    <td className="px-4 py-3 text-xs" style={{ color: 'var(--text-muted)' }}>
-                      {format(new Date(p.created_at), 'MMM d, yyyy')}
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => openEdit(p)}
-                          className="p-1.5 rounded-lg transition-all"
-                          style={{ color: 'var(--text-secondary)', border: '1px solid var(--border)' }}
-                          title="Edit"
-                        >
-                          <Pencil size={13} />
-                        </button>
-                        <button
-                          onClick={() => setDeleteId(p.id)}
-                          className="p-1.5 rounded-lg transition-all"
-                          style={{ color: 'var(--text-secondary)', border: '1px solid var(--border)' }}
-                          title="Delete"
-                        >
-                          <Trash2 size={13} />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                {products.map((p, i) => {
+                  const s = stats[p.id] || { total: 0, new: 0, confirmed: 0, delivered: 0, cancelled: 0, value: 0 }
+                  return (
+                    <tr
+                      key={p.id}
+                      className="transition-colors"
+                      style={{ borderBottom: i < products.length - 1 ? '1px solid var(--border)' : 'none' }}
+                      onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.02)' }}
+                      onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
+                    >
+                      <td className="px-4 py-3 font-medium text-sm whitespace-nowrap" style={{ color: 'var(--text-primary)' }}>
+                        {p.product_name}
+                      </td>
+                      <td className="px-4 py-3 text-xs font-mono" style={{ color: 'var(--text-secondary)' }}>
+                        {p.sku ?? '—'}
+                      </td>
+                      <td className="px-4 py-3 text-xs font-semibold" style={{ color: 'var(--text-primary)' }}>{s.total}</td>
+                      <td className="px-4 py-3 text-xs" style={{ color: '#a78bfa' }}>{s.new}</td>
+                      <td className="px-4 py-3 text-xs" style={{ color: '#34d399' }}>{s.confirmed}</td>
+                      <td className="px-4 py-3 text-xs" style={{ color: '#fbbf24' }}>{s.delivered}</td>
+                      <td className="px-4 py-3 text-xs" style={{ color: '#9ca3af' }}>{s.cancelled}</td>
+                      <td className="px-4 py-3 text-xs font-medium whitespace-nowrap" style={{ color: 'var(--text-primary)' }}>
+                        {s.value > 0 ? formatCurrency(s.value, p.currency || 'USD') : '—'}
+                      </td>
+                      <td className="px-4 py-3">
+                        <StatusBadge status={p.status} type="product" />
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => openEdit(p)}
+                            className="p-1.5 rounded-lg transition-all"
+                            style={{ color: 'var(--text-secondary)', border: '1px solid var(--border)' }}
+                            title="Edit"
+                          >
+                            <Pencil size={13} />
+                          </button>
+                          <button
+                            onClick={() => setDeleteId(p.id)}
+                            className="p-1.5 rounded-lg transition-all"
+                            style={{ color: 'var(--text-secondary)', border: '1px solid var(--border)' }}
+                            title="Delete"
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                })}
               </tbody>
             </table>
           </div>
