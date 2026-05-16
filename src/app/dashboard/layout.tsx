@@ -22,14 +22,13 @@ export default function DashboardLayout({
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const pathname = usePathname()
 
-  // Match the most specific route for the title
   const title =
     Object.entries(pageTitles)
       .sort((a, b) => b[0].length - a[0].length)
       .find(([path]) => pathname.startsWith(path))?.[1] ?? 'Dashboard'
 
   return (
-    <div className="flex h-screen overflow-hidden" style={{ background: 'var(--bg-primary)' }}>
+    <div className="flex h-screen overflow-hidden" style={{ background: 'var(--bg-app)' }}>
       <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
 
       {/* Main */}

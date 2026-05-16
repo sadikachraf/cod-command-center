@@ -1,30 +1,32 @@
 import { type ProductStatus, type LandingPageStatus, type OrderStatus } from '@/types'
 
-// Status color maps
-const productStatusStyles: Record<ProductStatus, { bg: string; text: string; dot: string }> = {
-  Testing:  { bg: 'rgba(59,130,246,0.12)',  text: '#60a5fa', dot: '#3b82f6' },
-  Scaling:  { bg: 'rgba(16,185,129,0.12)',  text: '#34d399', dot: '#10b981' },
-  Winner:   { bg: 'rgba(139,92,246,0.12)',  text: '#a78bfa', dot: '#8b5cf6' },
-  Killed:   { bg: 'rgba(239,68,68,0.12)',   text: '#f87171', dot: '#ef4444' },
-  Paused:   { bg: 'rgba(107,114,128,0.15)', text: '#9ca3af', dot: '#6b7280' },
+// ─── Order Status ───────────────────────────────────────────────────────────
+const orderStatusStyles: Record<OrderStatus, { bg: string; text: string; border: string }> = {
+  'New':          { bg: 'var(--status-new-bg)',          text: 'var(--status-new-text)',          border: 'var(--status-new-border)' },
+  'Confirmed':    { bg: 'var(--status-confirmed-bg)',    text: 'var(--status-confirmed-text)',    border: 'var(--status-confirmed-border)' },
+  'No Answer':    { bg: 'var(--status-noanswer-bg)',     text: 'var(--status-noanswer-text)',     border: 'var(--status-noanswer-border)' },
+  'Wrong Number': { bg: 'var(--status-wrongnum-bg)',     text: 'var(--status-wrongnum-text)',     border: 'var(--status-wrongnum-border)' },
+  'Cancelled':    { bg: 'var(--status-cancelled-bg)',    text: 'var(--status-cancelled-text)',    border: 'var(--status-cancelled-border)' },
+  'Shipped':      { bg: 'var(--status-shipped-bg)',      text: 'var(--status-shipped-text)',      border: 'var(--status-shipped-border)' },
+  'Delivered':    { bg: 'var(--status-delivered-bg)',    text: 'var(--status-delivered-text)',    border: 'var(--status-delivered-border)' },
+  'Returned':     { bg: 'var(--status-returned-bg)',     text: 'var(--status-returned-text)',     border: 'var(--status-returned-border)' },
+  'Paid':         { bg: 'var(--status-paid-bg)',         text: 'var(--status-paid-text)',         border: 'var(--status-paid-border)' },
 }
 
-const landingPageStatusStyles: Record<LandingPageStatus, { bg: string; text: string; dot: string }> = {
-  Active:   { bg: 'rgba(16,185,129,0.12)',  text: '#34d399', dot: '#10b981' },
-  Paused:   { bg: 'rgba(245,158,11,0.12)',  text: '#fbbf24', dot: '#f59e0b' },
-  Archived: { bg: 'rgba(107,114,128,0.15)', text: '#9ca3af', dot: '#6b7280' },
+// ─── Product Status ──────────────────────────────────────────────────────────
+const productStatusStyles: Record<ProductStatus, { bg: string; text: string; border: string }> = {
+  Testing: { bg: '#eff6ff', text: '#1d4ed8', border: '#bfdbfe' },
+  Scaling: { bg: '#f0fdf4', text: '#16a34a', border: '#bbf7d0' },
+  Winner:  { bg: '#faf5ff', text: '#7c3aed', border: '#ddd6fe' },
+  Killed:  { bg: '#fef2f2', text: '#dc2626', border: '#fecaca' },
+  Paused:  { bg: '#f9fafb', text: '#6b7280', border: '#e5e7eb' },
 }
 
-const orderStatusStyles: Record<OrderStatus, { bg: string; text: string; dot: string }> = {
-  'New':          { bg: 'rgba(59,130,246,0.12)',  text: '#60a5fa', dot: '#3b82f6' },
-  'Confirmed':    { bg: 'rgba(16,185,129,0.12)',  text: '#34d399', dot: '#10b981' },
-  'No Answer':    { bg: 'rgba(245,158,11,0.12)',  text: '#fbbf24', dot: '#f59e0b' },
-  'Wrong Number': { bg: 'rgba(239,68,68,0.12)',   text: '#f87171', dot: '#ef4444' },
-  'Cancelled':    { bg: 'rgba(239,68,68,0.12)',   text: '#f87171', dot: '#ef4444' },
-  'Shipped':      { bg: 'rgba(139,92,246,0.12)',  text: '#a78bfa', dot: '#8b5cf6' },
-  'Delivered':    { bg: 'rgba(16,185,129,0.15)',  text: '#6ee7b7', dot: '#10b981' },
-  'Returned':     { bg: 'rgba(107,114,128,0.15)', text: '#9ca3af', dot: '#6b7280' },
-  'Paid':         { bg: 'rgba(52,211,153,0.15)',  text: '#34d399', dot: '#059669' },
+// ─── Landing Page Status ─────────────────────────────────────────────────────
+const landingPageStatusStyles: Record<LandingPageStatus, { bg: string; text: string; border: string }> = {
+  Active:   { bg: '#f0fdf4', text: '#16a34a', border: '#bbf7d0' },
+  Paused:   { bg: '#fffbeb', text: '#d97706', border: '#fde68a' },
+  Archived: { bg: '#f9fafb', text: '#6b7280', border: '#e5e7eb' },
 }
 
 interface BadgeProps {
@@ -33,29 +35,21 @@ interface BadgeProps {
 }
 
 export function StatusBadge({ status, type }: BadgeProps) {
-  let style: { bg: string; text: string; dot: string }
+  let s: { bg: string; text: string; border: string }
 
   if (type === 'product') {
-    style = productStatusStyles[status as ProductStatus]
+    s = productStatusStyles[status as ProductStatus] ?? { bg: '#f9fafb', text: '#6b7280', border: '#e5e7eb' }
   } else if (type === 'landing_page') {
-    style = landingPageStatusStyles[status as LandingPageStatus]
+    s = landingPageStatusStyles[status as LandingPageStatus] ?? { bg: '#f9fafb', text: '#6b7280', border: '#e5e7eb' }
   } else {
-    style = orderStatusStyles[status as OrderStatus]
-  }
-
-  if (!style) {
-    style = { bg: 'rgba(107,114,128,0.15)', text: '#9ca3af', dot: '#6b7280' }
+    s = orderStatusStyles[status as OrderStatus] ?? { bg: '#f9fafb', text: '#6b7280', border: '#e5e7eb' }
   }
 
   return (
     <span
-      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium whitespace-nowrap"
-      style={{ background: style.bg, color: style.text }}
+      className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium whitespace-nowrap"
+      style={{ background: s.bg, color: s.text, border: `1px solid ${s.border}` }}
     >
-      <span
-        className="w-1.5 h-1.5 rounded-full flex-shrink-0"
-        style={{ background: style.dot }}
-      />
       {status}
     </span>
   )

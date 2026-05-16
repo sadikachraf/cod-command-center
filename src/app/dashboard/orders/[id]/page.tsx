@@ -7,20 +7,14 @@ import { useParams, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { StatusBadge } from '@/components/StatusBadge'
 import {
-  ArrowLeft, Package, Globe, MapPin, Phone, User,
-  Tag, Truck, MessageSquare, Save, Clock, Copy, ClipboardCheck
+  ArrowLeft, Package, Globe, User,
+  Tag, Truck, MessageSquare, Save, Clock, Copy, ClipboardCheck, AlertTriangle, CheckCircle,
 } from 'lucide-react'
 import type { Order, OrderStatus, Product, LandingPage, OrderEvent } from '@/types'
 import { format } from 'date-fns'
 import Link from 'next/link'
 import { QuickStatusSelect } from '@/components/QuickStatusSelect'
 import Modal from '@/components/Modal'
-import { AlertTriangle } from 'lucide-react'
-
-const ORDER_STATUSES: OrderStatus[] = [
-  'New', 'Confirmed', 'No Answer', 'Wrong Number',
-  'Cancelled', 'Shipped', 'Delivered', 'Returned', 'Paid',
-]
 
 function formatCurrency(value: number | null, currency = 'USD') {
   if (value === null) return '—'
@@ -32,22 +26,26 @@ type OrderDetail = Order & {
   landing_page: LandingPage | null
 }
 
-function InfoRow({ label, value, copyable }: { label: string; value?: string | null; copyable?: boolean }) {
+// ─── InfoRow ─────────────────────────────────────────────────────────────────
+function InfoRow({ label, value, copyable, mono }: {
+  label: string; value?: string | null; copyable?: boolean; mono?: boolean
+}) {
   if (!value) return null
   return (
-    <div className="flex items-start gap-2 group">
-      <span className="text-xs w-32 flex-shrink-0 pt-0.5" style={{ color: 'var(--text-muted)' }}>
+    <div className="flex items-start justify-between gap-4 py-2.5" style={{ borderBottom: '1px solid var(--border)' }}>
+      <span className="text-xs font-medium flex-shrink-0 mt-0.5" style={{ color: 'var(--text-muted)', minWidth: '110px' }}>
         {label}
       </span>
-      <span className="text-sm break-all flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
+      <span className={`text-sm break-all flex items-center gap-2 group text-right flex-1 ${mono ? 'font-mono' : ''}`}
+        style={{ color: 'var(--text-primary)' }}>
         {value}
         {copyable && (
-          <button 
+          <button
             onClick={() => navigator.clipboard.writeText(value)}
-            className="opacity-0 group-hover:opacity-100 transition-opacity p-0.5 rounded hover:bg-white/10"
+            className="opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
             title="Copy"
           >
-            <Copy size={12} style={{ color: 'var(--text-muted)' }} />
+            <Copy size={11} style={{ color: 'var(--text-muted)' }} />
           </button>
         )}
       </span>
@@ -55,16 +53,30 @@ function InfoRow({ label, value, copyable }: { label: string; value?: string | n
   )
 }
 
+// ─── Section ─────────────────────────────────────────────────────────────────
 function Section({ title, icon, children }: { title: string; icon: React.ReactNode; children: React.ReactNode }) {
   return (
-    <div className="rounded-xl p-5 space-y-3" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
-      <div className="flex items-center gap-2 mb-1">
-        <span style={{ color: 'var(--accent)' }}>{icon}</span>
-        <h3 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>{title}</h3>
+    <div className="rounded-xl overflow-hidden" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', boxShadow: 'var(--shadow-sm)' }}>
+      <div className="px-5 py-3.5 flex items-center gap-2" style={{ borderBottom: '1px solid var(--border)', background: 'var(--bg-surface-2)' }}>
+        <span style={{ color: 'var(--text-muted)' }}>{icon}</span>
+        <h3 className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--text-secondary)' }}>{title}</h3>
       </div>
-      {children}
+      <div className="px-5 pb-2 pt-1">{children}</div>
     </div>
   )
+}
+
+const QUICK_ACTION_STATUSES: OrderStatus[] = ['Confirmed', 'No Answer', 'Shipped', 'Delivered', 'Returned', 'Paid', 'Cancelled']
+const DANGEROUS_STATUSES: OrderStatus[] = ['Cancelled', 'Returned', 'Delivered', 'Paid']
+
+const quickActionStyle: Record<string, { color: string; bg: string; border: string }> = {
+  Confirmed:   { color: '#16a34a', bg: '#f0fdf4', border: '#bbf7d0' },
+  'No Answer': { color: '#d97706', bg: '#fffbeb', border: '#fde68a' },
+  Shipped:     { color: '#7c3aed', bg: '#faf5ff', border: '#ddd6fe' },
+  Delivered:   { color: '#059669', bg: '#ecfdf5', border: '#a7f3d0' },
+  Returned:    { color: '#c2410c', bg: '#fff7ed', border: '#fed7aa' },
+  Paid:        { color: '#047857', bg: '#ecfdf5', border: '#6ee7b7' },
+  Cancelled:   { color: '#dc2626', bg: '#fef2f2', border: '#fecaca' },
 }
 
 export default function OrderDetailPage() {
@@ -72,38 +84,33 @@ export default function OrderDetailPage() {
   const router = useRouter()
   const supabase = createClient()
 
-  const [order, setOrder] = useState<OrderDetail | null>(null)
-  const [events, setEvents] = useState<OrderEvent[]>([])
+  const [order, setOrder]     = useState<OrderDetail | null>(null)
+  const [events, setEvents]   = useState<OrderEvent[]>([])
   const [loading, setLoading] = useState(true)
-  const [notes, setNotes] = useState('')
-  const [saving, setSaving] = useState(false)
-  const [saved, setSaved] = useState(false)
+  const [notes, setNotes]     = useState('')
+  const [saving, setSaving]   = useState(false)
+  const [saved, setSaved]     = useState(false)
+  const [copied, setCopied]   = useState(false)
 
-  // Quick Action Modal
-  const [dangerousStatusOpen, setDangerousStatusOpen] = useState(false)
-  const [pendingDangerousStatus, setPendingDangerousStatus] = useState<OrderStatus | null>(null)
+  // Dangerous action modal
+  const [dangerModalOpen, setDangerModalOpen]   = useState(false)
+  const [pendingStatus, setPendingStatus]       = useState<OrderStatus | null>(null)
 
   const fetchOrder = useCallback(async () => {
     setLoading(true)
     const [{ data: orderData }, { data: eventsData }] = await Promise.all([
-      supabase
-        .from('orders')
+      supabase.from('orders')
         .select('*, product:products(*), landing_page:landing_pages(*)')
-        .eq('id', id)
-        .single(),
-      supabase
-        .from('order_events')
-        .select('*')
-        .eq('order_id', id)
-        .order('created_at', { ascending: false })
+        .eq('id', id).single(),
+      supabase.from('order_events')
+        .select('*').eq('order_id', id)
+        .order('created_at', { ascending: false }),
     ])
-
     if (orderData) {
-      const o = orderData as OrderDetail
-      setOrder(o)
-      setNotes(o.notes ?? '')
-      setEvents((eventsData ?? []) as OrderEvent[])
+      setOrder(orderData as OrderDetail)
+      setNotes(orderData.notes ?? '')
     }
+    setEvents((eventsData ?? []) as OrderEvent[])
     setLoading(false)
   }, [id, supabase])
 
@@ -111,78 +118,71 @@ export default function OrderDetailPage() {
 
   const handleSave = async () => {
     if (!order) return
-    if (notes === (order.notes ?? '')) return // No change
-
     setSaving(true)
-    
-    // 1. Update order
     await supabase.from('orders').update({ notes }).eq('id', order.id)
-
-    // 2. Insert event
     const newEvent = {
       order_id: order.id,
       product_id: order.product_id,
       landing_page_id: order.landing_page_id,
       event_type: 'note_updated',
-      event_data: { note: notes.substring(0, 50) + (notes.length > 50 ? '...' : '') }
+      event_data: { note: notes.substring(0, 50) + (notes.length > 50 ? '…' : '') },
     }
     const { data: insertedEvent } = await supabase.from('order_events').insert(newEvent).select('*').single()
-
     setSaved(true)
     setTimeout(() => setSaved(false), 2000)
     setSaving(false)
     setOrder((prev) => prev ? { ...prev, notes } : prev)
-    if (insertedEvent) {
-      setEvents(prev => [insertedEvent as OrderEvent, ...prev])
-    }
+    if (insertedEvent) setEvents((prev) => [insertedEvent as OrderEvent, ...prev])
   }
 
   const copySummary = () => {
     if (!order) return
-    const summary = `Order: ${order.order_number}\nName: ${order.customer_name}\nPhone: ${order.phone}\nCity: ${order.city}\nAddress: ${order.address}\nPackage: ${order.package_name ?? '—'}\nValue: ${order.order_value} ${order.currency}`
-    navigator.clipboard.writeText(summary)
+    const s = `Order: ${order.order_number}\nName: ${order.customer_name}\nPhone: ${order.phone}\nCity: ${order.city}\nAddress: ${order.address}\nPackage: ${order.package_name ?? '—'}\nValue: ${order.order_value} ${order.currency}`
+    navigator.clipboard.writeText(s)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
   }
 
-  const handleQuickAction = async (newStatus: OrderStatus) => {
-    if (['Cancelled', 'Returned', 'Delivered', 'Paid'].includes(newStatus)) {
-      setPendingDangerousStatus(newStatus)
-      setDangerousStatusOpen(true)
-      return
+  const handleQuickAction = (newStatus: OrderStatus) => {
+    if (DANGEROUS_STATUSES.includes(newStatus)) {
+      setPendingStatus(newStatus)
+      setDangerModalOpen(true)
+    } else {
+      executeStatusUpdate(newStatus)
     }
-    executeStatusUpdate(newStatus)
   }
 
   const executeStatusUpdate = async (newStatus: OrderStatus) => {
     if (!order) return
     const { error } = await supabase.from('orders').update({ status: newStatus }).eq('id', order.id)
     if (!error) {
-       await supabase.from('order_events').insert({
-         order_id: order.id,
-         product_id: order.product_id,
-         landing_page_id: order.landing_page_id,
-         event_type: 'status_changed',
-         event_data: { from: order.status, to: newStatus }
-       })
-       setOrder({ ...order, status: newStatus })
-       fetchOrder()
+      await supabase.from('order_events').insert({
+        order_id: order.id,
+        product_id: order.product_id,
+        landing_page_id: order.landing_page_id,
+        event_type: 'status_changed',
+        event_data: { from: order.status, to: newStatus },
+      })
+      setOrder({ ...order, status: newStatus })
+      fetchOrder()
     }
-    setDangerousStatusOpen(false)
-    setPendingDangerousStatus(null)
+    setDangerModalOpen(false)
+    setPendingStatus(null)
   }
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-32" style={{ color: 'var(--text-muted)' }}>
-        <Package size={32} className="animate-pulse opacity-40" />
+      <div className="flex items-center justify-center py-32">
+        <Package size={28} className="animate-pulse opacity-30" style={{ color: 'var(--text-muted)' }} />
       </div>
     )
   }
 
   if (!order) {
     return (
-      <div className="text-center py-32" style={{ color: 'var(--text-muted)' }}>
-        <p>Order not found.</p>
-        <Link href="/dashboard/orders" className="mt-3 text-sm" style={{ color: 'var(--accent)' }}>
+      <div className="text-center py-32">
+        <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>Order not found.</p>
+        <Link href="/dashboard/orders" className="mt-3 text-sm font-medium" style={{ color: 'var(--accent-text)' }}>
           ← Back to orders
         </Link>
       </div>
@@ -191,213 +191,199 @@ export default function OrderDetailPage() {
 
   return (
     <div className="space-y-5 fade-in max-w-5xl">
-      {/* Back + header */}
+
+      {/* Header */}
       <div className="flex items-center gap-3">
-        <button onClick={() => router.back()} className="p-2 rounded-lg"
-          style={{ color: 'var(--text-secondary)', border: '1px solid var(--border)' }}>
-          <ArrowLeft size={16} />
+        <button
+          onClick={() => router.back()}
+          className="p-2 rounded-lg transition-all"
+          style={{ color: 'var(--text-secondary)', border: '1px solid var(--border)', background: 'var(--bg-surface)' }}
+          onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--bg-muted)' }}
+          onMouseLeave={(e) => { e.currentTarget.style.background = 'var(--bg-surface)' }}
+        >
+          <ArrowLeft size={15} />
         </button>
-        <div>
-          <h2 className="text-lg font-bold" style={{ color: 'var(--text-primary)' }}>
-            {order.order_number}
-          </h2>
-          <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2.5 flex-wrap">
+            <h2 className="text-base font-bold font-mono" style={{ color: 'var(--text-primary)' }}>
+              {order.order_number}
+            </h2>
+            <StatusBadge status={order.status} type="order" />
+          </div>
+          <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
             {format(new Date(order.created_at), 'EEEE, MMMM d yyyy · HH:mm')}
           </p>
         </div>
-        <div className="ml-auto">
-          <StatusBadge status={order.status} type="order" />
-        </div>
+        <button
+          onClick={copySummary}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex-shrink-0"
+          style={{
+            color: copied ? 'var(--success)' : 'var(--text-secondary)',
+            border: `1px solid ${copied ? 'var(--status-confirmed-border)' : 'var(--border)'}`,
+            background: copied ? 'var(--status-confirmed-bg)' : 'var(--bg-surface)',
+          }}
+        >
+          {copied ? <CheckCircle size={12} /> : <ClipboardCheck size={12} />}
+          {copied ? 'Copied!' : 'Copy Summary'}
+        </button>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-        {/* Left: customer + details */}
+
+        {/* Left — details */}
         <div className="lg:col-span-2 space-y-4">
+
           {/* Customer */}
-          <Section title="Customer" icon={<User size={15} />}>
-            <InfoRow label="Name" value={order.customer_name} copyable />
-            <InfoRow label="Phone" value={order.phone} copyable />
-            <InfoRow label="City" value={order.city} copyable />
-            <InfoRow label="Address" value={order.address} copyable />
-            
-            <button onClick={copySummary} className="flex items-center gap-2 mt-4 px-3 py-1.5 rounded-lg text-xs font-medium transition-all" style={{ color: 'var(--text-primary)', border: '1px solid var(--border)', background: 'var(--bg-primary)' }}>
-              <ClipboardCheck size={14} /> Copy Full Summary
-            </button>
+          <Section title="Customer" icon={<User size={13} />}>
+            <InfoRow label="Full Name"    value={order.customer_name} copyable />
+            <InfoRow label="Phone"        value={order.phone}         copyable mono />
+            <InfoRow label="City"         value={order.city}          copyable />
+            <InfoRow label="Address"      value={order.address}       copyable />
           </Section>
 
-          {/* Order details */}
-          <Section title="Order Details" icon={<Package size={15} />}>
-            <InfoRow label="Package" value={order.package_name} />
-            <InfoRow label="Quantity" value={order.quantity?.toString()} />
-            <InfoRow label="Value" value={formatCurrency(order.order_value, order.currency)} />
-            <InfoRow label="Currency" value={order.currency} />
-            <InfoRow label="IP Address" value={order.ip_address} />
+          {/* Order */}
+          <Section title="Order Details" icon={<Package size={13} />}>
+            <InfoRow label="Package"    value={order.package_name} />
+            <InfoRow label="Quantity"   value={order.quantity?.toString()} />
+            <InfoRow label="Value"      value={formatCurrency(order.order_value, order.currency)} />
+            <InfoRow label="Currency"   value={order.currency} />
+            <InfoRow label="IP Address" value={order.ip_address} mono />
           </Section>
 
-          {/* Product & Landing Page */}
-          <Section title="Source" icon={<Globe size={15} />}>
-            <InfoRow label="Product" value={order.product?.product_name} />
+          {/* Source */}
+          <Section title="Source" icon={<Globe size={13} />}>
+            <InfoRow label="Product"      value={order.product?.product_name} />
             <InfoRow label="Landing Page" value={order.landing_page?.page_name} />
-            <InfoRow label="Market" value={order.landing_page?.market} />
-            <InfoRow label="Language" value={order.landing_page?.language} />
+            <InfoRow label="Market"       value={order.landing_page?.market} />
+            <InfoRow label="Language"     value={order.landing_page?.language} />
           </Section>
 
-          {/* UTM Tracking */}
+          {/* UTM */}
           {(order.utm_source || order.utm_campaign || order.campaign_id) && (
-            <Section title="UTM & Tracking" icon={<Tag size={15} />}>
-              <InfoRow label="utm_source" value={order.utm_source} />
-              <InfoRow label="utm_medium" value={order.utm_medium} />
+            <Section title="UTM & Tracking" icon={<Tag size={13} />}>
+              <InfoRow label="utm_source"   value={order.utm_source} />
+              <InfoRow label="utm_medium"   value={order.utm_medium} />
               <InfoRow label="utm_campaign" value={order.utm_campaign} />
-              <InfoRow label="utm_content" value={order.utm_content} />
-              <InfoRow label="utm_term" value={order.utm_term} />
-              <InfoRow label="Campaign ID" value={order.campaign_id} />
-              <InfoRow label="Adset ID" value={order.adset_id} />
-              <InfoRow label="Ad ID" value={order.ad_id} />
-              <InfoRow label="Platform" value={order.platform} />
-              <InfoRow label="Device" value={order.device} />
-              <InfoRow label="Browser" value={order.browser} />
+              <InfoRow label="utm_content"  value={order.utm_content} />
+              <InfoRow label="utm_term"     value={order.utm_term} />
+              <InfoRow label="Campaign ID"  value={order.campaign_id} mono />
+              <InfoRow label="Adset ID"     value={order.adset_id}    mono />
+              <InfoRow label="Ad ID"        value={order.ad_id}       mono />
+              <InfoRow label="Platform"     value={order.platform} />
+              <InfoRow label="Device"       value={order.device} />
+              <InfoRow label="Browser"      value={order.browser} />
             </Section>
           )}
 
-          {/* Timestamps */}
-          <Section title="Timestamps" icon={<Clock size={15} />}>
-            <InfoRow label="Created" value={format(new Date(order.created_at), 'MMM d, yyyy HH:mm:ss')} />
-            <InfoRow label="Updated" value={format(new Date(order.updated_at), 'MMM d, yyyy HH:mm:ss')} />
-          </Section>
         </div>
 
-        {/* Right: status + notes */}
+        {/* Right — actions + notes + timeline */}
         <div className="space-y-4">
-          {/* Status update */}
-          <div className="rounded-xl p-5 space-y-4" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
+
+          {/* Status */}
+          <div className="rounded-xl p-5 space-y-4" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', boxShadow: 'var(--shadow-sm)' }}>
             <div className="flex items-center gap-2">
-              <Truck size={15} style={{ color: 'var(--accent)' }} />
-              <h3 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
-                Update Status
-              </h3>
+              <Truck size={14} style={{ color: 'var(--accent)' }} />
+              <h3 className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--text-secondary)' }}>Status</h3>
             </div>
+
             <QuickStatusSelect
               orderId={order.id}
               productId={order.product_id}
               landingPageId={order.landing_page_id}
               currentStatus={order.status}
               onStatusChange={(newStatus) => {
-                setOrder(prev => prev ? { ...prev, status: newStatus } : prev)
-                fetchOrder() // Refresh to get the new event
+                setOrder((prev) => prev ? { ...prev, status: newStatus } : prev)
+                fetchOrder()
               }}
               className="w-full px-3 py-2 rounded-lg text-sm focus:outline-none"
               style={{
-                background: 'var(--bg-primary)',
+                background: 'var(--bg-surface-2)',
                 border: '1px solid var(--border)',
                 color: 'var(--text-primary)',
               }}
             />
 
-            <div className="pt-2 border-t mt-4" style={{ borderColor: 'var(--border)' }}>
-              <span className="text-xs font-medium mb-2 block" style={{ color: 'var(--text-secondary)' }}>Quick Actions</span>
-              <div className="grid grid-cols-2 gap-2">
-                {['Confirmed', 'No Answer', 'Cancelled', 'Shipped', 'Delivered', 'Returned', 'Paid'].map(status => (
-                  <button
-                    key={status}
-                    onClick={() => handleQuickAction(status as OrderStatus)}
-                    className="px-2 py-1.5 rounded-lg text-xs font-medium transition-colors"
-                    style={{
-                      background: 'var(--bg-primary)',
-                      border: '1px solid var(--border)',
-                      color: 'var(--text-primary)'
-                    }}
-                    onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.05)' }}
-                    onMouseLeave={(e) => { e.currentTarget.style.background = 'var(--bg-primary)' }}
-                  >
-                    {status}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Notes */}
+            {/* Quick action buttons */}
             <div>
-              <div className="flex items-center gap-2 mb-2">
-                <MessageSquare size={14} style={{ color: 'var(--accent)' }} />
-                <span className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>
-                  Internal Notes
-                </span>
+              <p className="text-xs font-medium mb-2" style={{ color: 'var(--text-muted)' }}>Quick actions</p>
+              <div className="grid grid-cols-2 gap-1.5">
+                {QUICK_ACTION_STATUSES.map((status) => {
+                  const st = quickActionStyle[status] ?? { color: 'var(--text-secondary)', bg: 'var(--bg-muted)', border: 'var(--border)' }
+                  return (
+                    <button
+                      key={status}
+                      onClick={() => handleQuickAction(status)}
+                      className="px-2 py-1.5 rounded-lg text-xs font-medium transition-all"
+                      style={{ color: st.color, background: st.bg, border: `1px solid ${st.border}` }}
+                      onMouseEnter={(e) => { e.currentTarget.style.opacity = '0.8' }}
+                      onMouseLeave={(e) => { e.currentTarget.style.opacity = '1' }}
+                    >
+                      {status}
+                    </button>
+                  )
+                })}
               </div>
-              <textarea
-                rows={5}
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                placeholder="Add internal notes about this order…"
-                className="w-full px-3 py-2 rounded-lg text-sm resize-none focus:outline-none"
-                style={{
-                  background: 'var(--bg-primary)',
-                  border: '1px solid var(--border)',
-                  color: 'var(--text-primary)',
-                }}
-                onFocus={(e) => {
-                  e.target.style.borderColor = 'var(--accent)'
-                  e.target.style.boxShadow = '0 0 0 3px var(--accent-glow)'
-                }}
-                onBlur={(e) => {
-                  e.target.style.borderColor = 'var(--border)'
-                  e.target.style.boxShadow = 'none'
-                }}
-              />
             </div>
+          </div>
 
+          {/* Notes */}
+          <div className="rounded-xl p-5 space-y-3" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', boxShadow: 'var(--shadow-sm)' }}>
+            <div className="flex items-center gap-2">
+              <MessageSquare size={14} style={{ color: 'var(--accent)' }} />
+              <h3 className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--text-secondary)' }}>Internal Notes</h3>
+            </div>
+            <textarea
+              rows={5}
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="Add internal notes about this order…"
+              className="w-full px-3 py-2 rounded-lg text-sm resize-none focus:outline-none"
+              style={{
+                background: 'var(--bg-surface-2)',
+                border: '1px solid var(--border)',
+                color: 'var(--text-primary)',
+              }}
+              onFocus={(e) => {
+                e.target.style.borderColor = 'var(--accent)'
+                e.target.style.boxShadow = '0 0 0 3px var(--accent-light)'
+              }}
+              onBlur={(e) => {
+                e.target.style.borderColor = 'var(--border)'
+                e.target.style.boxShadow = 'none'
+              }}
+            />
             <button
               id="save-order-btn"
               onClick={handleSave}
               disabled={saving}
-              className="w-full py-2 rounded-lg text-sm font-semibold text-white flex items-center justify-center gap-2"
+              className="w-full py-2 rounded-lg text-sm font-semibold flex items-center justify-center gap-1.5 transition-all"
               style={{
-                background: saved
-                  ? 'rgba(16,185,129,0.8)'
-                  : saving
-                  ? 'rgba(59,130,246,0.5)'
-                  : 'linear-gradient(135deg, #3b82f6, #2563eb)',
+                background: saved ? 'var(--status-confirmed-bg)' : 'var(--accent)',
+                color: saved ? 'var(--success)' : '#ffffff',
+                border: saved ? '1px solid var(--status-confirmed-border)' : 'none',
               }}
             >
-              <Save size={14} />
-              {saved ? 'Saved!' : saving ? 'Saving…' : 'Save Changes'}
+              {saved ? <CheckCircle size={14} /> : <Save size={14} />}
+              {saved ? 'Saved!' : saving ? 'Saving…' : 'Save Notes'}
             </button>
           </div>
 
-          {/* Quick info card */}
-          <div className="rounded-xl p-4 space-y-2" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
-            <p className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>Quick Info</p>
-            <div className="flex items-center gap-2">
-              <MapPin size={13} style={{ color: 'var(--text-muted)' }} />
-              <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>{order.city}</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <Phone size={13} style={{ color: 'var(--text-muted)' }} />
-              <span className="text-sm font-mono" style={{ color: 'var(--text-secondary)' }}>{order.phone}</span>
-            </div>
-            <div className="pt-1 border-t" style={{ borderColor: 'var(--border)' }}>
-              <span className="text-2xl font-bold" style={{ color: 'var(--text-primary)' }}>
-                {formatCurrency(order.order_value, order.currency)}
-              </span>
-            </div>
-          </div>
           {/* Timeline */}
-          <div className="rounded-xl p-5 space-y-4" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
-            <div className="flex items-center gap-2 mb-2">
-              <Clock size={15} style={{ color: 'var(--accent)' }} />
-              <h3 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
-                Timeline
-              </h3>
+          <div className="rounded-xl p-5" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', boxShadow: 'var(--shadow-sm)' }}>
+            <div className="flex items-center gap-2 mb-4">
+              <Clock size={14} style={{ color: 'var(--accent)' }} />
+              <h3 className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--text-secondary)' }}>Timeline</h3>
             </div>
-            
-            <div className="relative pl-3 border-l-2 space-y-4" style={{ borderColor: 'var(--border)' }}>
+            <div className="relative pl-4 space-y-4" style={{ borderLeft: '2px solid var(--border)' }}>
               {events.map((evt) => (
                 <div key={evt.id} className="relative">
-                  <div className="absolute -left-[17px] top-1 w-2.5 h-2.5 rounded-full" style={{ background: 'var(--accent)', border: '2px solid var(--bg-card)' }}></div>
+                  <div className="absolute -left-[17px] top-1 w-2 h-2 rounded-full" style={{ background: 'var(--accent)', border: '2px solid var(--bg-surface)' }} />
                   <p className="text-xs font-medium" style={{ color: 'var(--text-primary)' }}>
                     {evt.event_type === 'status_changed' ? (
-                      <>Status changed to <span style={{ color: 'var(--accent)' }}>{(evt.event_data as any).to}</span></>
+                      <>Status → <strong>{(evt.event_data as any).to}</strong></>
                     ) : evt.event_type === 'note_updated' ? (
-                      <>Note updated: <span className="italic" style={{ color: 'var(--text-secondary)' }}>{(evt.event_data as any).note}</span></>
+                      <>Note: <span className="italic" style={{ color: 'var(--text-secondary)' }}>{(evt.event_data as any).note}</span></>
                     ) : evt.event_type}
                   </p>
                   <p className="text-[11px] mt-0.5" style={{ color: 'var(--text-muted)' }}>
@@ -406,7 +392,7 @@ export default function OrderDetailPage() {
                 </div>
               ))}
               <div className="relative">
-                <div className="absolute -left-[17px] top-1 w-2.5 h-2.5 rounded-full" style={{ background: 'var(--border)', border: '2px solid var(--bg-card)' }}></div>
+                <div className="absolute -left-[17px] top-1 w-2 h-2 rounded-full" style={{ background: 'var(--border-strong)', border: '2px solid var(--bg-surface)' }} />
                 <p className="text-xs font-medium" style={{ color: 'var(--text-primary)' }}>Order created</p>
                 <p className="text-[11px] mt-0.5" style={{ color: 'var(--text-muted)' }}>
                   {format(new Date(order.created_at), 'MMM d, HH:mm')}
@@ -414,29 +400,36 @@ export default function OrderDetailPage() {
               </div>
             </div>
           </div>
+
         </div>
       </div>
 
-      <Modal isOpen={dangerousStatusOpen} onClose={() => setDangerousStatusOpen(false)} title="Confirm Action" size="sm">
+      {/* Dangerous action modal */}
+      <Modal isOpen={dangerModalOpen} onClose={() => setDangerModalOpen(false)} title="Confirm Status Change" size="sm">
         <div className="flex flex-col items-center text-center space-y-4">
-          <div className="w-12 h-12 rounded-full flex items-center justify-center" style={{ background: 'rgba(239,68,68,0.1)', color: '#ef4444' }}>
-            <AlertTriangle size={24} />
+          <div className="w-11 h-11 rounded-full flex items-center justify-center" style={{ background: 'var(--danger-light)', color: 'var(--danger)' }}>
+            <AlertTriangle size={20} />
           </div>
           <div>
-            <h3 className="text-base font-semibold" style={{ color: 'var(--text-primary)' }}>Are you sure?</h3>
+            <h3 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>Are you sure?</h3>
             <p className="text-sm mt-1" style={{ color: 'var(--text-secondary)' }}>
-              Are you sure you want to mark this order as <strong>{pendingDangerousStatus}</strong>?
+              Mark this order as <strong>{pendingStatus}</strong>?
             </p>
           </div>
-          <div className="flex w-full gap-3 pt-4">
-            <button onClick={() => setDangerousStatusOpen(false)} className="flex-1 py-2 rounded-lg text-sm font-medium transition-colors" style={{ background: 'var(--bg-primary)', color: 'var(--text-primary)', border: '1px solid var(--border)' }}>Cancel</button>
-            <button onClick={() => pendingDangerousStatus && executeStatusUpdate(pendingDangerousStatus)} className="flex-1 py-2 rounded-lg text-sm font-medium text-white transition-colors" style={{ background: '#ef4444' }}>
-              Yes, update
-            </button>
+          <div className="flex w-full gap-2.5 pt-2">
+            <button
+              onClick={() => setDangerModalOpen(false)}
+              className="flex-1 py-2 rounded-lg text-sm font-medium"
+              style={{ background: 'var(--bg-muted)', color: 'var(--text-primary)', border: '1px solid var(--border)' }}
+            >Cancel</button>
+            <button
+              onClick={() => pendingStatus && executeStatusUpdate(pendingStatus)}
+              className="flex-1 py-2 rounded-lg text-sm font-medium text-white"
+              style={{ background: 'var(--danger)' }}
+            >Yes, update</button>
           </div>
         </div>
       </Modal>
-
     </div>
   )
 }

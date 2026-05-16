@@ -6,7 +6,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { StatusBadge } from '@/components/StatusBadge'
 import Modal from '@/components/Modal'
-import { Plus, Pencil, Trash2, Package, RefreshCw } from 'lucide-react'
+import { Plus, Pencil, Trash2, Package, RefreshCw, TrendingUp } from 'lucide-react'
 import type { Product, ProductStatus } from '@/types'
 import { format } from 'date-fns'
 
@@ -25,59 +25,57 @@ const emptyForm = {
   status: 'Testing' as ProductStatus,
 }
 
-// Shared input style helper
-const inputClass =
-  'w-full px-3 py-2 rounded-lg text-sm transition-all focus:outline-none'
-const inputStyle = {
-  background: 'var(--bg-primary)',
+const inputCls = 'w-full px-3 py-2 rounded-lg text-sm focus:outline-none transition-all'
+const inputSty = {
+  background: 'var(--bg-surface)',
   border: '1px solid var(--border)',
   color: 'var(--text-primary)',
 }
+const focusSty = { borderColor: 'var(--accent)', boxShadow: '0 0 0 3px var(--accent-light)' }
+const blurSty  = { borderColor: 'var(--border)', boxShadow: 'none' }
 
-type ProductStats = {
-  total: number
-  new: number
-  confirmed: number
-  delivered: number
-  cancelled: number
-  value: number
-}
+type ProductStats = { total: number; new: number; confirmed: number; delivered: number; cancelled: number; value: number }
 
 function formatCurrency(value: number, currency = 'USD') {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency, maximumFractionDigits: 0 }).format(value)
 }
 
+function StatPill({ label, value, color }: { label: string; value: number; color: string }) {
+  return (
+    <div className="flex flex-col items-center">
+      <span className="text-sm font-semibold" style={{ color }}>{value}</span>
+      <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>{label}</span>
+    </div>
+  )
+}
+
 export default function ProductsPage() {
   const supabase = createClient()
   const [products, setProducts] = useState<Product[]>([])
-  const [stats, setStats] = useState<Record<string, ProductStats>>({})
-  const [loading, setLoading] = useState(true)
+  const [stats, setStats]       = useState<Record<string, ProductStats>>({})
+  const [loading, setLoading]   = useState(true)
   const [modalOpen, setModalOpen] = useState(false)
-  const [deleteId, setDeleteId] = useState<string | null>(null)
+  const [deleteId, setDeleteId]   = useState<string | null>(null)
   const [editProduct, setEditProduct] = useState<Product | null>(null)
-  const [form, setForm] = useState({ ...emptyForm })
-  const [saving, setSaving] = useState(false)
+  const [form, setForm]   = useState({ ...emptyForm })
+  const [saving, setSaving]   = useState(false)
   const [formError, setFormError] = useState('')
 
-  const fetchProductsAndStats = useCallback(async () => {
+  const fetchAll = useCallback(async () => {
     setLoading(true)
     const [{ data: prods }, { data: orders }] = await Promise.all([
       supabase.from('products').select('*').order('created_at', { ascending: false }),
-      supabase.from('orders').select('product_id, status, order_value')
+      supabase.from('orders').select('product_id, status, order_value'),
     ])
-    
     setProducts((prods as Product[]) ?? [])
-    
     const s: Record<string, ProductStats> = {}
     if (orders) {
-      orders.forEach(o => {
+      orders.forEach((o) => {
         if (!o.product_id) return
-        if (!s[o.product_id]) {
-          s[o.product_id] = { total: 0, new: 0, confirmed: 0, delivered: 0, cancelled: 0, value: 0 }
-        }
+        if (!s[o.product_id]) s[o.product_id] = { total: 0, new: 0, confirmed: 0, delivered: 0, cancelled: 0, value: 0 }
         s[o.product_id].total++
         s[o.product_id].value += (o.order_value || 0)
-        if (o.status === 'New') s[o.product_id].new++
+        if (o.status === 'New')       s[o.product_id].new++
         if (o.status === 'Confirmed') s[o.product_id].confirmed++
         if (o.status === 'Delivered') s[o.product_id].delivered++
         if (o.status === 'Cancelled') s[o.product_id].cancelled++
@@ -87,49 +85,28 @@ export default function ProductsPage() {
     setLoading(false)
   }, [supabase])
 
-  useEffect(() => {
-    fetchProductsAndStats()
-  }, [fetchProductsAndStats])
+  useEffect(() => { fetchAll() }, [fetchAll])
 
-  const openCreate = () => {
-    setEditProduct(null)
-    setForm({ ...emptyForm })
-    setFormError('')
-    setModalOpen(true)
-  }
-
-  const openEdit = (p: Product) => {
+  const openCreate = () => { setEditProduct(null); setForm({ ...emptyForm }); setFormError(''); setModalOpen(true) }
+  const openEdit   = (p: Product) => {
     setEditProduct(p)
     setForm({
-      product_name: p.product_name,
-      sku: p.sku ?? '',
-      country: p.country ?? '',
-      currency: p.currency ?? 'USD',
-      selling_price: p.selling_price?.toString() ?? '',
-      product_cost: p.product_cost?.toString() ?? '',
-      shipping_cost: p.shipping_cost?.toString() ?? '',
-      return_cost: p.return_cost?.toString() ?? '',
-      call_center_cost: p.call_center_cost?.toString() ?? '',
+      product_name: p.product_name, sku: p.sku ?? '', country: p.country ?? '',
+      currency: p.currency ?? 'USD', selling_price: p.selling_price?.toString() ?? '',
+      product_cost: p.product_cost?.toString() ?? '', shipping_cost: p.shipping_cost?.toString() ?? '',
+      return_cost: p.return_cost?.toString() ?? '', call_center_cost: p.call_center_cost?.toString() ?? '',
       status: p.status,
     })
-    setFormError('')
-    setModalOpen(true)
+    setFormError(''); setModalOpen(true)
   }
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!form.product_name.trim()) {
-      setFormError('Product name is required.')
-      return
-    }
-    setSaving(true)
-    setFormError('')
-
+    if (!form.product_name.trim()) { setFormError('Product name is required.'); return }
+    setSaving(true); setFormError('')
     const payload = {
-      product_name: form.product_name.trim(),
-      sku: form.sku.trim() || null,
-      country: form.country.trim() || null,
-      currency: form.currency.trim() || null,
+      product_name: form.product_name.trim(), sku: form.sku.trim() || null,
+      country: form.country.trim() || null, currency: form.currency.trim() || null,
       selling_price: form.selling_price ? parseFloat(form.selling_price) : null,
       product_cost: form.product_cost ? parseFloat(form.product_cost) : null,
       shipping_cost: form.shipping_cost ? parseFloat(form.shipping_cost) : null,
@@ -137,125 +114,80 @@ export default function ProductsPage() {
       call_center_cost: form.call_center_cost ? parseFloat(form.call_center_cost) : null,
       status: form.status,
     }
-
     let error
-    if (editProduct) {
-      ;({ error } = await supabase.from('products').update(payload).eq('id', editProduct.id))
-    } else {
-      ;({ error } = await supabase.from('products').insert(payload))
-    }
-
-    if (error) {
-      setFormError(error.message)
-    } else {
-      setModalOpen(false)
-      fetchProductsAndStats()
-    }
+    if (editProduct) { ;({ error } = await supabase.from('products').update(payload).eq('id', editProduct.id)) }
+    else             { ;({ error } = await supabase.from('products').insert(payload)) }
+    if (error) { setFormError(error.message) }
+    else { setModalOpen(false); fetchAll() }
     setSaving(false)
   }
 
   const handleDelete = async () => {
     if (!deleteId) return
     await supabase.from('products').delete().eq('id', deleteId)
-    setDeleteId(null)
-    fetchProductsAndStats()
+    setDeleteId(null); fetchAll()
   }
 
-  const field = (
-    key: keyof typeof form,
-    label: string,
-    type = 'text',
-    placeholder = ''
-  ) => (
+  const field = (key: keyof typeof form, label: string, type = 'text', placeholder = '') => (
     <div>
-      <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>
-        {label}
-      </label>
-      <input
-        type={type}
-        value={form[key] as string}
+      <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>{label}</label>
+      <input type={type} value={form[key] as string} placeholder={placeholder}
         onChange={(e) => setForm((f) => ({ ...f, [key]: e.target.value }))}
-        placeholder={placeholder}
-        className={inputClass}
-        style={inputStyle}
-        onFocus={(e) => {
-          e.target.style.borderColor = 'var(--accent)'
-          e.target.style.boxShadow = '0 0 0 3px var(--accent-glow)'
-        }}
-        onBlur={(e) => {
-          e.target.style.borderColor = 'var(--border)'
-          e.target.style.boxShadow = 'none'
-        }}
-      />
+        className={inputCls} style={inputSty}
+        onFocus={(e) => Object.assign(e.target.style, focusSty)}
+        onBlur={(e)  => Object.assign(e.target.style, blurSty)} />
     </div>
   )
 
   return (
-    <div className="space-y-5 fade-in">
+    <div className="space-y-5 fade-in max-w-[1400px]">
+
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-lg font-bold" style={{ color: 'var(--text-primary)' }}>Products</h2>
-          <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
+          <p className="text-sm mt-0.5" style={{ color: 'var(--text-secondary)' }}>
             {products.length} product{products.length !== 1 ? 's' : ''}
           </p>
         </div>
         <div className="flex gap-2">
-          <button
-            onClick={fetchProductsAndStats}
-            className="p-2 rounded-lg transition-all"
-            style={{
-              color: 'var(--text-secondary)',
-              border: '1px solid var(--border)',
-              background: 'transparent',
-            }}
-            title="Refresh"
-          >
-            <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
+          <button onClick={fetchAll} className="p-2 rounded-lg transition-all"
+            style={{ color: 'var(--text-secondary)', border: '1px solid var(--border)', background: 'var(--bg-surface)' }}
+            onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--bg-muted)' }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = 'var(--bg-surface)' }}>
+            <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
           </button>
-          <button
-            id="create-product-btn"
-            onClick={openCreate}
-            className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold text-white transition-all"
-            style={{ background: 'linear-gradient(135deg, #3b82f6, #2563eb)' }}
-          >
-            <Plus size={16} />
-            New Product
+          <button id="create-product-btn" onClick={openCreate}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-semibold text-white"
+            style={{ background: 'var(--accent)' }}>
+            <Plus size={15} /> New Product
           </button>
         </div>
       </div>
 
       {/* Table */}
-      <div
-        className="rounded-xl overflow-hidden"
-        style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}
-      >
+      <div className="rounded-xl overflow-hidden" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', boxShadow: 'var(--shadow-sm)' }}>
         {loading ? (
-          <div className="py-20 text-center" style={{ color: 'var(--text-muted)' }}>
-            <RefreshCw size={28} className="mx-auto mb-3 animate-spin opacity-40" />
-            Loading products…
+          <div className="py-24 text-center">
+            <RefreshCw size={22} className="mx-auto mb-3 animate-spin" style={{ color: 'var(--text-muted)' }} />
+            <p className="text-sm" style={{ color: 'var(--text-muted)' }}>Loading products…</p>
           </div>
         ) : products.length === 0 ? (
-          <div className="py-20 text-center" style={{ color: 'var(--text-muted)' }}>
-            <Package size={40} className="mx-auto mb-3 opacity-30" />
-            <p className="text-sm">No products yet.</p>
-            <button
-              onClick={openCreate}
-              className="mt-3 px-4 py-1.5 rounded-lg text-sm font-medium"
-              style={{ color: 'var(--accent)', border: '1px solid rgba(59,130,246,0.3)' }}
-            >
+          <div className="py-24 text-center">
+            <Package size={36} className="mx-auto mb-3 opacity-20" style={{ color: 'var(--text-muted)' }} />
+            <p className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>No products yet</p>
+            <button onClick={openCreate} className="mt-2 text-xs font-medium" style={{ color: 'var(--accent-text)' }}>
               Create your first product
             </button>
           </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full">
-              <thead>
-                <tr style={{ borderBottom: '1px solid var(--border)' }}>
-                  {['Product', 'SKU', 'Orders', 'New', 'Conf', 'Deliv', 'Canc', 'Revenue', 'Status', 'Actions'].map((h) => (
-                    <th key={h} className="px-4 py-3 text-left text-xs font-medium whitespace-nowrap" style={{ color: 'var(--text-muted)' }}>
-                      {h}
-                    </th>
+              <thead style={{ background: 'var(--bg-surface-2)', borderBottom: '1px solid var(--border)' }}>
+                <tr>
+                  {['Product', 'SKU', 'Country', 'Currency', 'Total', 'New', 'Conf', 'Deliv', 'Canc', 'Revenue', 'Status', ''].map((h) => (
+                    <th key={h} className="px-4 py-3 text-left text-xs font-medium whitespace-nowrap"
+                      style={{ color: 'var(--text-muted)' }}>{h}</th>
                   ))}
                 </tr>
               </thead>
@@ -263,47 +195,35 @@ export default function ProductsPage() {
                 {products.map((p, i) => {
                   const s = stats[p.id] || { total: 0, new: 0, confirmed: 0, delivered: 0, cancelled: 0, value: 0 }
                   return (
-                    <tr
-                      key={p.id}
-                      className="transition-colors"
-                      style={{ borderBottom: i < products.length - 1 ? '1px solid var(--border)' : 'none' }}
-                      onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.02)' }}
-                      onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
-                    >
-                      <td className="px-4 py-3 font-medium text-sm whitespace-nowrap" style={{ color: 'var(--text-primary)' }}>
-                        {p.product_name}
+                    <tr key={p.id} style={{ borderBottom: i < products.length - 1 ? '1px solid var(--border)' : 'none' }}
+                      onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--bg-surface-2)' }}
+                      onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}>
+                      <td className="px-4 py-3.5 text-sm font-semibold whitespace-nowrap" style={{ color: 'var(--text-primary)' }}>{p.product_name}</td>
+                      <td className="px-4 py-3.5 text-xs font-mono" style={{ color: 'var(--text-secondary)' }}>{p.sku ?? '—'}</td>
+                      <td className="px-4 py-3.5 text-xs" style={{ color: 'var(--text-secondary)' }}>{p.country ?? '—'}</td>
+                      <td className="px-4 py-3.5 text-xs font-mono" style={{ color: 'var(--text-secondary)' }}>{p.currency ?? '—'}</td>
+                      <td className="px-4 py-3.5 text-sm font-bold" style={{ color: 'var(--text-primary)' }}>{s.total}</td>
+                      <td className="px-4 py-3.5 text-xs font-semibold" style={{ color: 'var(--status-new-text)' }}>{s.new}</td>
+                      <td className="px-4 py-3.5 text-xs font-semibold" style={{ color: 'var(--status-confirmed-text)' }}>{s.confirmed}</td>
+                      <td className="px-4 py-3.5 text-xs font-semibold" style={{ color: 'var(--status-delivered-text)' }}>{s.delivered}</td>
+                      <td className="px-4 py-3.5 text-xs font-semibold" style={{ color: 'var(--status-cancelled-text)' }}>{s.cancelled}</td>
+                      <td className="px-4 py-3.5 text-sm font-bold whitespace-nowrap" style={{ color: 'var(--text-primary)' }}>
+                        {s.value > 0 ? formatCurrency(s.value, p.currency || 'USD') : <span style={{ color: 'var(--text-muted)' }}>—</span>}
                       </td>
-                      <td className="px-4 py-3 text-xs font-mono" style={{ color: 'var(--text-secondary)' }}>
-                        {p.sku ?? '—'}
-                      </td>
-                      <td className="px-4 py-3 text-xs font-semibold" style={{ color: 'var(--text-primary)' }}>{s.total}</td>
-                      <td className="px-4 py-3 text-xs" style={{ color: '#a78bfa' }}>{s.new}</td>
-                      <td className="px-4 py-3 text-xs" style={{ color: '#34d399' }}>{s.confirmed}</td>
-                      <td className="px-4 py-3 text-xs" style={{ color: '#fbbf24' }}>{s.delivered}</td>
-                      <td className="px-4 py-3 text-xs" style={{ color: '#9ca3af' }}>{s.cancelled}</td>
-                      <td className="px-4 py-3 text-xs font-medium whitespace-nowrap" style={{ color: 'var(--text-primary)' }}>
-                        {s.value > 0 ? formatCurrency(s.value, p.currency || 'USD') : '—'}
-                      </td>
-                      <td className="px-4 py-3">
-                        <StatusBadge status={p.status} type="product" />
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-2">
-                          <button
-                            onClick={() => openEdit(p)}
-                            className="p-1.5 rounded-lg transition-all"
+                      <td className="px-4 py-3.5"><StatusBadge status={p.status} type="product" /></td>
+                      <td className="px-4 py-3.5">
+                        <div className="flex items-center gap-1.5">
+                          <button onClick={() => openEdit(p)} className="p-1.5 rounded-lg transition-all"
                             style={{ color: 'var(--text-secondary)', border: '1px solid var(--border)' }}
-                            title="Edit"
-                          >
-                            <Pencil size={13} />
+                            onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--bg-muted)' }}
+                            onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}>
+                            <Pencil size={12} />
                           </button>
-                          <button
-                            onClick={() => setDeleteId(p.id)}
-                            className="p-1.5 rounded-lg transition-all"
+                          <button onClick={() => setDeleteId(p.id)} className="p-1.5 rounded-lg transition-all"
                             style={{ color: 'var(--text-secondary)', border: '1px solid var(--border)' }}
-                            title="Delete"
-                          >
-                            <Trash2 size={13} />
+                            onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--danger)'; e.currentTarget.style.borderColor = 'var(--status-cancelled-border)'; e.currentTarget.style.background = 'var(--danger-light)' }}
+                            onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--text-secondary)'; e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.background = 'transparent' }}>
+                            <Trash2 size={12} />
                           </button>
                         </div>
                       </td>
@@ -316,101 +236,57 @@ export default function ProductsPage() {
         )}
       </div>
 
-      {/* Create / Edit Modal */}
-      <Modal
-        isOpen={modalOpen}
-        onClose={() => setModalOpen(false)}
-        title={editProduct ? 'Edit Product' : 'New Product'}
-        size="lg"
-      >
+      {/* Create/Edit Modal */}
+      <Modal isOpen={modalOpen} onClose={() => setModalOpen(false)} title={editProduct ? 'Edit Product' : 'New Product'} size="lg">
         <form onSubmit={handleSave} className="space-y-4">
           {formError && (
-            <div
-              className="p-3 rounded-lg text-sm"
-              style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', color: '#f87171' }}
-            >
+            <div className="p-3 rounded-lg text-xs" style={{ background: 'var(--danger-light)', border: '1px solid var(--status-cancelled-border)', color: 'var(--danger)' }}>
               {formError}
             </div>
           )}
-
           <div className="grid grid-cols-2 gap-3">
             <div className="col-span-2">{field('product_name', 'Product Name *', 'text', 'e.g. NeckZen Pro')}</div>
             {field('sku', 'SKU', 'text', 'e.g. NZP-001')}
             {field('country', 'Country / Market', 'text', 'e.g. Morocco')}
             {field('currency', 'Currency', 'text', 'e.g. USD, MAD, HUF')}
-
             {field('selling_price', 'Selling Price', 'number', '0.00')}
             {field('product_cost', 'Product Cost', 'number', '0.00')}
             {field('shipping_cost', 'Shipping Cost', 'number', '0.00')}
             {field('return_cost', 'Return Cost', 'number', '0.00')}
+            <div className="col-span-2">{field('call_center_cost', 'Call Center Cost', 'number', '0.00')}</div>
             <div className="col-span-2">
-              {field('call_center_cost', 'Call Center Cost', 'number', '0.00')}
-            </div>
-
-            {/* Status */}
-            <div className="col-span-2">
-              <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>
-                Status
-              </label>
-              <select
-                value={form.status}
-                onChange={(e) => setForm((f) => ({ ...f, status: e.target.value as ProductStatus }))}
-                className={inputClass}
-                style={inputStyle}
-              >
-                {PRODUCT_STATUSES.map((s) => (
-                  <option key={s} value={s}>{s}</option>
-                ))}
+              <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>Status</label>
+              <select value={form.status} onChange={(e) => setForm((f) => ({ ...f, status: e.target.value as ProductStatus }))}
+                className={inputCls} style={inputSty}>
+                {PRODUCT_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
               </select>
             </div>
           </div>
-
-          <div className="flex gap-3 pt-2">
-            <button
-              type="button"
-              onClick={() => setModalOpen(false)}
-              className="flex-1 py-2 rounded-lg text-sm font-medium"
-              style={{
-                color: 'var(--text-secondary)',
-                border: '1px solid var(--border)',
-              }}
-            >
+          <div className="flex gap-2.5 pt-2">
+            <button type="button" onClick={() => setModalOpen(false)} className="flex-1 py-2 rounded-lg text-sm font-medium"
+              style={{ color: 'var(--text-secondary)', border: '1px solid var(--border)', background: 'var(--bg-muted)' }}>
               Cancel
             </button>
-            <button
-              id="save-product-btn"
-              type="submit"
-              disabled={saving}
-              className="flex-1 py-2 rounded-lg text-sm font-semibold text-white"
-              style={{
-                background: saving ? 'rgba(59,130,246,0.5)' : 'linear-gradient(135deg, #3b82f6, #2563eb)',
-                cursor: saving ? 'not-allowed' : 'pointer',
-              }}
-            >
+            <button id="save-product-btn" type="submit" disabled={saving} className="flex-1 py-2 rounded-lg text-sm font-semibold text-white"
+              style={{ background: saving ? 'rgba(37,99,235,0.6)' : 'var(--accent)' }}>
               {saving ? 'Saving…' : editProduct ? 'Save Changes' : 'Create Product'}
             </button>
           </div>
         </form>
       </Modal>
 
-      {/* Delete Confirm Modal */}
+      {/* Delete confirm */}
       <Modal isOpen={!!deleteId} onClose={() => setDeleteId(null)} title="Delete Product" size="sm">
         <p className="text-sm mb-5" style={{ color: 'var(--text-secondary)' }}>
           Are you sure you want to delete this product? This cannot be undone.
         </p>
-        <div className="flex gap-3">
-          <button
-            onClick={() => setDeleteId(null)}
-            className="flex-1 py-2 rounded-lg text-sm font-medium"
-            style={{ color: 'var(--text-secondary)', border: '1px solid var(--border)' }}
-          >
+        <div className="flex gap-2.5">
+          <button onClick={() => setDeleteId(null)} className="flex-1 py-2 rounded-lg text-sm font-medium"
+            style={{ color: 'var(--text-secondary)', border: '1px solid var(--border)', background: 'var(--bg-muted)' }}>
             Cancel
           </button>
-          <button
-            onClick={handleDelete}
-            className="flex-1 py-2 rounded-lg text-sm font-semibold text-white"
-            style={{ background: '#ef4444' }}
-          >
+          <button onClick={handleDelete} className="flex-1 py-2 rounded-lg text-sm font-semibold text-white"
+            style={{ background: 'var(--danger)' }}>
             Delete
           </button>
         </div>
