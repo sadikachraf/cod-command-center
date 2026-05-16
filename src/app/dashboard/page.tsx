@@ -104,7 +104,6 @@ export default async function DashboardPage() {
             background: 'var(--accent)',
             color: '#ffffff',
           }}
-          onMouseOver={() => {}}
         >
           <ShoppingCart size={13} />
           All orders
