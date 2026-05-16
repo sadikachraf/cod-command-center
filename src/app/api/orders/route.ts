@@ -8,12 +8,22 @@ import type { OrderSubmissionPayload } from '@/types'
 // Called by external landing pages to submit COD orders
 // ------------------------------------------------------------------
 
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+}
+
+export async function OPTIONS() {
+  return NextResponse.json({}, { headers: corsHeaders })
+}
+
 function jsonError(message: string, status = 400) {
-  return NextResponse.json({ success: false, error: message }, { status })
+  return NextResponse.json({ success: false, error: message }, { status, headers: corsHeaders })
 }
 
 function jsonSuccess(data: Record<string, unknown>) {
-  return NextResponse.json({ success: true, ...data }, { status: 200 })
+  return NextResponse.json({ success: true, ...data }, { status: 200, headers: corsHeaders })
 }
 
 // Optional Telegram notification (non-blocking)
@@ -35,6 +45,7 @@ async function sendTelegramNotification(message: string) {
 }
 
 export async function POST(request: NextRequest) {
+  console.log('[OrderAPI] Request received')
   let body: Partial<OrderSubmissionPayload>
 
   // 1. Parse request body
@@ -62,6 +73,8 @@ export async function POST(request: NextRequest) {
     }
   }
 
+  console.log(`[OrderAPI] landing_page_api_key received: ${!!body.landing_page_api_key}`)
+
   // Numeric validation
   const quantity = Number(body.quantity)
   const orderValue = Number(body.order_value)
@@ -81,6 +94,11 @@ export async function POST(request: NextRequest) {
     .select('id, product_id, status, page_name')
     .eq('api_key', body.landing_page_api_key)
     .single()
+
+  console.log(`[OrderAPI] Landing page found: ${!!landingPage}`)
+  if (landingPage) {
+    console.log(`[OrderAPI] Product ID found: ${!!landingPage.product_id}`)
+  }
 
   if (lpError || !landingPage) {
     console.error('[OrderAPI] Invalid API key:', body.landing_page_api_key, lpError?.message)
@@ -129,6 +147,11 @@ export async function POST(request: NextRequest) {
     })
     .select('id, order_number')
     .single()
+
+  console.log(`[OrderAPI] Insert success: ${!!newOrder}`)
+  if (insertError) {
+    console.error('[OrderAPI] Supabase insert error:', insertError.message, insertError.details)
+  }
 
   if (insertError || !newOrder) {
     console.error('[OrderAPI] Failed to insert order:', insertError?.message)
