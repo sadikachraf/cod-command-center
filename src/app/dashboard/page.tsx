@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { format } from 'date-fns'
 import { StatCard } from '@/components/StatCard'
 import { LatestOrdersTable } from '@/components/LatestOrdersTable'
+import { BreakdownRow } from '@/components/BreakdownRow'
 import {
   ShoppingCart, DollarSign, CheckCircle, Truck,
   XCircle, RotateCcw, TrendingUp, Package2, Star,
@@ -20,17 +21,15 @@ function formatCurrency(value: number | null, currency = 'USD') {
   }).format(value)
 }
 
-// ─── Reusable card for breakdown sections ────────────────────────────────────
+// ─── Static server-component card wrapper (no event handlers) ─────────────────
 function DashCard({
   title,
   subtitle,
   children,
-  action,
 }: {
   title: string
   subtitle?: string
   children: React.ReactNode
-  action?: React.ReactNode
 }) {
   return (
     <div
@@ -55,67 +54,13 @@ function DashCard({
             </p>
           )}
         </div>
-        {action}
       </div>
       <div style={{ padding: '16px 24px' }}>{children}</div>
     </div>
   )
 }
 
-// ─── Row inside breakdown card ────────────────────────────────────────────────
-function BreakdownRow({
-  name,
-  count,
-  revenue,
-  currency,
-  rank,
-}: {
-  name: string
-  count: number
-  revenue: number
-  currency: string
-  rank: number
-}) {
-  return (
-    <div
-      className="flex items-center justify-between rounded-xl px-4 py-3 transition-colors"
-      style={{ background: rank === 1 ? 'var(--accent-light)' : 'var(--bg-surface-2)' }}
-      onMouseEnter={(e) => { e.currentTarget.style.background = rank === 1 ? '#DBEAFE' : 'var(--bg-hover)' }}
-      onMouseLeave={(e) => { e.currentTarget.style.background = rank === 1 ? 'var(--accent-light)' : 'var(--bg-surface-2)' }}
-    >
-      <div className="flex items-center gap-3 min-w-0">
-        <span
-          className="w-5 h-5 rounded-md flex items-center justify-center text-[10px] font-bold flex-shrink-0"
-          style={{
-            background: rank === 1 ? 'var(--accent)' : 'var(--border-strong)',
-            color: rank === 1 ? '#fff' : 'var(--text-secondary)',
-          }}
-        >
-          {rank}
-        </span>
-        <span
-          className="text-sm font-medium truncate"
-          style={{ color: rank === 1 ? 'var(--accent-text)' : 'var(--text-primary)' }}
-        >
-          {name}
-        </span>
-      </div>
-      <div className="flex items-center gap-5 flex-shrink-0 ml-4">
-        <span className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>
-          {count} orders
-        </span>
-        <span
-          className="text-sm font-bold"
-          style={{ color: 'var(--text-primary)', fontVariantNumeric: 'tabular-nums' }}
-        >
-          {formatCurrency(revenue, currency)}
-        </span>
-      </div>
-    </div>
-  )
-}
-
-// ─── Page ────────────────────────────────────────────────────────────────────
+// ─── Page ─────────────────────────────────────────────────────────────────────
 export default async function DashboardPage() {
   const supabase = await createClient()
 
@@ -144,7 +89,7 @@ export default async function DashboardPage() {
 
   const latestOrders = (latestOrdersData ?? []) as typeof orders
 
-  // ── Stats ──
+  // ── Stats ──────────────────────────────────────────────────────────────────
   const ordersToday     = orders.length
   const totalValue      = orders.reduce((s, o) => s + (o.order_value || 0), 0)
   const newOrders       = orders.filter((o) => o.status === 'New').length
@@ -153,7 +98,7 @@ export default async function DashboardPage() {
   const cancelledOrders = orders.filter((o) => o.status === 'Cancelled').length
   const returnedOrders  = orders.filter((o) => o.status === 'Returned').length
 
-  // ── Product breakdown ──
+  // ── Product breakdown ───────────────────────────────────────────────────────
   const productMap = orders.reduce((acc, o) => {
     if (o.product_id && o.product?.product_name) {
       if (!acc[o.product_id]) {
@@ -166,7 +111,7 @@ export default async function DashboardPage() {
   }, {} as Record<string, { name: string; count: number; revenue: number; currency: string }>)
   const productBreakdown = Object.values(productMap).sort((a, b) => b.count - a.count)
 
-  // ── Landing page breakdown ──
+  // ── Landing page breakdown ──────────────────────────────────────────────────
   const lpMap = orders.reduce((acc, o) => {
     if (o.landing_page_id && o.landing_page?.page_name) {
       if (!acc[o.landing_page_id]) {
@@ -183,19 +128,19 @@ export default async function DashboardPage() {
     <div className="fade-in" style={{ maxWidth: '1280px' }}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: '28px' }}>
 
-        {/* ── Page header ── */}
+        {/* ── Page header ───────────────────────────────────────────────────── */}
         <div className="flex items-start justify-between flex-wrap gap-4">
           <div>
             <h2 className="text-2xl font-bold tracking-tight" style={{ color: 'var(--text-primary)' }}>
               Good day 👋
             </h2>
             <p className="text-sm mt-1" style={{ color: 'var(--text-secondary)' }}>
-              {format(new Date(), "EEEE, MMMM d, yyyy")} &mdash; here&apos;s your daily performance
+              {format(new Date(), 'EEEE, MMMM d, yyyy')} &mdash; here&apos;s your daily performance
             </p>
           </div>
           <Link
             href="/dashboard/orders"
-            className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold text-white transition-opacity hover:opacity-90 flex-shrink-0"
+            className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold text-white flex-shrink-0 transition-opacity hover:opacity-90"
             style={{ background: 'var(--accent)', boxShadow: '0 2px 8px rgba(37,99,235,0.3)' }}
           >
             <ShoppingCart size={15} />
@@ -203,7 +148,7 @@ export default async function DashboardPage() {
           </Link>
         </div>
 
-        {/* ── Primary KPI row ── */}
+        {/* ── Primary KPIs ──────────────────────────────────────────────────── */}
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
           <StatCard
             label="Orders Today"
@@ -236,7 +181,7 @@ export default async function DashboardPage() {
           />
         </div>
 
-        {/* ── Secondary KPI row ── */}
+        {/* ── Secondary KPIs ────────────────────────────────────────────────── */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <StatCard
             label="Delivered"
@@ -261,7 +206,7 @@ export default async function DashboardPage() {
           />
         </div>
 
-        {/* ── Breakdown ── */}
+        {/* ── Breakdown ─────────────────────────────────────────────────────── */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
           <DashCard
             title="By Product"
@@ -269,16 +214,30 @@ export default async function DashboardPage() {
           >
             {productBreakdown.length === 0 ? (
               <div className="flex flex-col items-center py-8 text-center">
-                <div className="w-12 h-12 rounded-2xl mb-3 flex items-center justify-center" style={{ background: 'var(--bg-muted)' }}>
+                <div
+                  className="w-12 h-12 rounded-2xl mb-3 flex items-center justify-center"
+                  style={{ background: 'var(--bg-muted)' }}
+                >
                   <Package2 size={20} style={{ color: 'var(--text-muted)' }} />
                 </div>
-                <p className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>No orders today yet</p>
-                <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>Breakdown will appear when orders arrive</p>
+                <p className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>
+                  No orders today yet
+                </p>
+                <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
+                  Breakdown will appear when orders arrive
+                </p>
               </div>
             ) : (
               <div className="flex flex-col gap-2">
                 {productBreakdown.map((p, i) => (
-                  <BreakdownRow key={p.name} name={p.name} count={p.count} revenue={p.revenue} currency={p.currency} rank={i + 1} />
+                  <BreakdownRow
+                    key={p.name}
+                    name={p.name}
+                    count={p.count}
+                    revenue={p.revenue}
+                    currency={p.currency}
+                    rank={i + 1}
+                  />
                 ))}
               </div>
             )}
@@ -290,23 +249,37 @@ export default async function DashboardPage() {
           >
             {lpBreakdown.length === 0 ? (
               <div className="flex flex-col items-center py-8 text-center">
-                <div className="w-12 h-12 rounded-2xl mb-3 flex items-center justify-center" style={{ background: 'var(--bg-muted)' }}>
+                <div
+                  className="w-12 h-12 rounded-2xl mb-3 flex items-center justify-center"
+                  style={{ background: 'var(--bg-muted)' }}
+                >
                   <Star size={20} style={{ color: 'var(--text-muted)' }} />
                 </div>
-                <p className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>No landing page data yet</p>
-                <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>Breakdown will appear when orders arrive</p>
+                <p className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>
+                  No landing page data yet
+                </p>
+                <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
+                  Breakdown will appear when orders arrive
+                </p>
               </div>
             ) : (
               <div className="flex flex-col gap-2">
                 {lpBreakdown.map((lp, i) => (
-                  <BreakdownRow key={lp.name} name={lp.name} count={lp.count} revenue={lp.revenue} currency={lp.currency} rank={i + 1} />
+                  <BreakdownRow
+                    key={lp.name}
+                    name={lp.name}
+                    count={lp.count}
+                    revenue={lp.revenue}
+                    currency={lp.currency}
+                    rank={i + 1}
+                  />
                 ))}
               </div>
             )}
           </DashCard>
         </div>
 
-        {/* ── Recent orders ── */}
+        {/* ── Recent orders table ───────────────────────────────────────────── */}
         <LatestOrdersTable orders={latestOrders} />
 
       </div>
