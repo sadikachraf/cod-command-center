@@ -2,7 +2,7 @@
 
 export const dynamic = 'force-dynamic'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { StatusBadge } from '@/components/StatusBadge'
 import {
@@ -128,6 +128,16 @@ export default function OrdersPage() {
     setSearch(''); setStatus(''); setProduct(''); setLp(''); setDateFrom(''); setDateTo('')
   }
 
+  const metrics = useMemo(() => {
+    return {
+      total: orders.length,
+      newOrders: orders.filter((o) => o.status === 'New').length,
+      confirmed: orders.filter((o) => o.status === 'Confirmed').length,
+      delivered: orders.filter((o) => o.status === 'Delivered').length,
+      cancelled: orders.filter((o) => o.status === 'Cancelled').length,
+    }
+  }, [orders])
+
   const toggleOne = (id: string) =>
     setSelected((p) => p.includes(id) ? p.filter((x) => x !== id) : [...p, id])
   const toggleAll = () =>
@@ -202,7 +212,7 @@ export default function OrdersPage() {
       {/* ── Page header ── */}
       <PageHeader
         title="Orders"
-        subtitle={loading ? 'Loading…' : `${orders.length} order${orders.length !== 1 ? 's' : ''} found`}
+        subtitle="Manage incoming COD orders, confirmations, delivery status, and exports."
         action={
           <button
             onClick={fetchOrders}
@@ -238,6 +248,22 @@ export default function OrdersPage() {
         }
       />
 
+      {/* ── Summary strip ── */}
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+        {[
+          { label: 'Total Orders', value: metrics.total },
+          { label: 'New', value: metrics.newOrders, color: '#1D4ED8' },
+          { label: 'Confirmed', value: metrics.confirmed, color: '#15803D' },
+          { label: 'Delivered', value: metrics.delivered, color: '#15803D' },
+          { label: 'Cancelled', value: metrics.cancelled, color: '#B91C1C' },
+        ].map((m) => (
+          <div key={m.label} className="rounded-xl px-4 py-3" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', boxShadow: 'var(--shadow-xs)' }}>
+            <p className="text-[11px] font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>{m.label}</p>
+            <p className="text-xl font-bold mt-1" style={{ color: m.color || 'var(--text-primary)' }}>{m.value}</p>
+          </div>
+        ))}
+      </div>
+
       {/* ── Filters card ── */}
       <div
         className="rounded-2xl"
@@ -248,15 +274,15 @@ export default function OrdersPage() {
           padding: '16px 20px',
         }}
       >
-        <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
-            <Filter size={13} style={{ color: 'var(--text-muted)' }} />
-            <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--text-secondary)' }}>
+            <Filter size={14} style={{ color: 'var(--text-muted)' }} />
+            <span className="text-[13px] font-bold" style={{ color: 'var(--text-primary)' }}>
               Filters
             </span>
             {hasFilters && (
               <span
-                className="text-[10px] font-bold px-1.5 py-0.5 rounded-md"
+                className="text-[10px] font-bold px-1.5 py-0.5 rounded-md ml-1"
                 style={{ background: 'var(--accent-light)', color: 'var(--accent-text)', border: '1px solid var(--accent-border)' }}
               >
                 Active
@@ -266,18 +292,18 @@ export default function OrdersPage() {
           {hasFilters && (
             <button
               onClick={clearFilters}
-              className="flex items-center gap-1 text-xs font-medium transition-opacity hover:opacity-70"
+              className="flex items-center gap-1 text-xs font-semibold transition-opacity hover:opacity-70"
               style={{ color: 'var(--accent-text)' }}
             >
-              <X size={11} /> Clear all
+              <X size={12} /> Clear all
             </button>
           )}
         </div>
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3">
           {/* Search */}
-          <div className="col-span-2 relative">
+          <div className="lg:col-span-2 relative">
             <Search
-              size={13}
+              size={14}
               className="absolute pointer-events-none"
               style={{ color: 'var(--text-muted)', left: '12px', top: '50%', transform: 'translateY(-50%)' }}
             />
@@ -286,7 +312,7 @@ export default function OrdersPage() {
               placeholder="Search name, phone, order…"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              style={{ ...ctrlBase, paddingLeft: '34px' }}
+              style={{ ...ctrlBase, paddingLeft: '36px' }}
               onFocus={onFocus}
               onBlur={onBlur}
             />
@@ -310,9 +336,11 @@ export default function OrdersPage() {
           <div className="flex gap-2">
             <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)}
               style={{ ...ctrlBase, flex: 1, padding: '0 8px', fontSize: '12px' }}
+              title="From Date"
               onFocus={onFocus} onBlur={onBlur} />
             <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)}
               style={{ ...ctrlBase, flex: 1, padding: '0 8px', fontSize: '12px' }}
+              title="To Date"
               onFocus={onFocus} onBlur={onBlur} />
           </div>
         </div>

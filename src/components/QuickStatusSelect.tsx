@@ -31,6 +31,21 @@ export function QuickStatusSelect({
   const [pendingStatus, setPending]     = useState<OrderStatus | null>(null)
   const supabase = createClient()
 
+  const st = (function getStatusStyles(status: OrderStatus) {
+    switch (status) {
+      case 'New':         return { bg: '#EFF6FF', color: '#1D4ED8', border: '#BFDBFE' }
+      case 'Confirmed':   return { bg: '#F0FDF4', color: '#15803D', border: '#BBF7D0' }
+      case 'No Answer':   return { bg: '#FFFBEB', color: '#B45309', border: '#FDE68A' }
+      case 'Wrong Number':return { bg: '#FEF2F2', color: '#B91C1C', border: '#FECACA' }
+      case 'Cancelled':   return { bg: '#FEF2F2', color: '#B91C1C', border: '#FECACA' }
+      case 'Shipped':     return { bg: '#FAF5FF', color: '#7E22CE', border: '#E9D5FF' }
+      case 'Delivered':   return { bg: '#F0FDF4', color: '#15803D', border: '#BBF7D0' }
+      case 'Returned':    return { bg: '#FFF7ED', color: '#C2410C', border: '#FED7AA' }
+      case 'Paid':        return { bg: '#F0FDF4', color: '#15803D', border: '#BBF7D0' }
+      default:            return { bg: '#F9FAFB', color: '#374151', border: '#E5E7EB' }
+    }
+  })(currentStatus)
+
   const handleSelect = async (e: React.ChangeEvent<HTMLSelectElement>) => {
     const newStatus = e.target.value as OrderStatus
     if (newStatus === currentStatus) return
@@ -67,20 +82,25 @@ export function QuickStatusSelect({
 
   return (
     <>
-      <select
-        value={currentStatus}
-        onChange={handleSelect}
-        disabled={updating}
-        className={className || 'px-2 py-1 rounded-md text-xs font-medium cursor-pointer focus:outline-none'}
-        style={style || {
-          background: 'var(--bg-surface-2)',
-          border: '1px solid var(--border)',
-          color: 'var(--text-primary)',
-          opacity: updating ? 0.5 : 1,
-        }}
-      >
-        {ORDER_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
-      </select>
+      <div className="relative inline-block">
+        <select
+          value={currentStatus}
+          onChange={handleSelect}
+          disabled={updating}
+          className={className || 'px-2.5 py-1 pr-6 rounded-full text-[11px] font-bold cursor-pointer focus:outline-none appearance-none transition-colors'}
+          style={style || {
+            background: st.bg,
+            border: `1px solid ${st.border}`,
+            color: st.color,
+            opacity: updating ? 0.5 : 1,
+          }}
+        >
+          {ORDER_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
+        </select>
+        <div className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none opacity-50">
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+        </div>
+      </div>
 
       <Modal isOpen={modalOpen} onClose={() => setModalOpen(false)} title="Confirm Status Change" size="sm">
         <div className="flex flex-col items-center text-center space-y-4">
