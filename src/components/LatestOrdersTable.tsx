@@ -2,6 +2,7 @@
 
 import { format } from 'date-fns'
 import { StatusBadge } from '@/components/StatusBadge'
+import { EmptyState } from '@/components/EmptyState'
 import { Package, ArrowRight } from 'lucide-react'
 import type { Order, OrderStatus } from '@/types'
 import Link from 'next/link'
@@ -66,20 +67,11 @@ export function LatestOrdersTable({ orders }: { orders: OrderRow[] }) {
 
       {/* Empty state */}
       {orders.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-20">
-          <div
-            className="w-14 h-14 rounded-2xl flex items-center justify-center mb-4"
-            style={{ background: 'var(--bg-muted)' }}
-          >
-            <Package size={24} style={{ color: 'var(--text-muted)' }} />
-          </div>
-          <p className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
-            No orders yet
-          </p>
-          <p className="text-xs mt-1 text-center max-w-xs" style={{ color: 'var(--text-muted)' }}>
-            Connect a landing page with an API key to start receiving orders
-          </p>
-        </div>
+        <EmptyState
+          icon={Package}
+          title="No orders yet"
+          description="Connect a landing page with an API key to start receiving orders."
+        />
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full border-collapse">

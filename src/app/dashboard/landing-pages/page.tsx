@@ -6,6 +6,8 @@ import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { StatusBadge } from '@/components/StatusBadge'
 import Modal from '@/components/Modal'
+import { PageHeader } from '@/components/PageHeader'
+import { EmptyState } from '@/components/EmptyState'
 import { Plus, Pencil, Trash2, Globe, RefreshCw, Copy, CheckCheck, ExternalLink } from 'lucide-react'
 import type { LandingPage, LandingPageStatus, Product } from '@/types'
 
@@ -136,27 +138,25 @@ export default function LandingPagesPage() {
     <div className="space-y-5 fade-in max-w-[1400px]">
 
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-lg font-bold" style={{ color: 'var(--text-primary)' }}>Landing Pages</h2>
-          <p className="text-sm mt-0.5" style={{ color: 'var(--text-secondary)' }}>
-            {pages.length} page{pages.length !== 1 ? 's' : ''}
-          </p>
-        </div>
-        <div className="flex gap-2">
+      <PageHeader
+        title="Landing Pages"
+        subtitle={`${pages.length} page${pages.length !== 1 ? 's' : ''}`}
+        action={
+          <button id="create-lp-btn" onClick={openCreate}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-semibold text-white transition-opacity hover:opacity-90"
+            style={{ background: 'var(--accent)' }}>
+            <Plus size={15} /> New Landing Page
+          </button>
+        }
+        secondaryAction={
           <button onClick={fetchData} className="p-2 rounded-lg transition-all"
             style={{ color: 'var(--text-secondary)', border: '1px solid var(--border)', background: 'var(--bg-surface)' }}
             onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--bg-muted)' }}
             onMouseLeave={(e) => { e.currentTarget.style.background = 'var(--bg-surface)' }}>
             <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
           </button>
-          <button id="create-lp-btn" onClick={openCreate}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-semibold text-white"
-            style={{ background: 'var(--accent)' }}>
-            <Plus size={15} /> New Landing Page
-          </button>
-        </div>
-      </div>
+        }
+      />
 
       {/* Table */}
       <div className="rounded-xl overflow-hidden" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', boxShadow: 'var(--shadow-sm)' }}>
@@ -166,13 +166,16 @@ export default function LandingPagesPage() {
             <p className="text-sm" style={{ color: 'var(--text-muted)' }}>Loading…</p>
           </div>
         ) : pages.length === 0 ? (
-          <div className="py-24 text-center">
-            <Globe size={36} className="mx-auto mb-3 opacity-20" style={{ color: 'var(--text-muted)' }} />
-            <p className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>No landing pages yet</p>
-            <button onClick={openCreate} className="mt-2 text-xs font-medium" style={{ color: 'var(--accent-text)' }}>
-              Add your first landing page
-            </button>
-          </div>
+          <EmptyState
+            icon={Globe}
+            title="No landing pages yet"
+            description="Add your first landing page to generate an API key and start receiving orders."
+            action={
+              <button onClick={openCreate} className="text-xs font-medium transition-opacity hover:opacity-70" style={{ color: 'var(--accent-text)' }}>
+                Add your first landing page
+              </button>
+            }
+          />
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full">

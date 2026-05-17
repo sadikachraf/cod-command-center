@@ -14,6 +14,8 @@ import { format } from 'date-fns'
 import Link from 'next/link'
 import { QuickStatusSelect } from '@/components/QuickStatusSelect'
 import Modal from '@/components/Modal'
+import { PageHeader } from '@/components/PageHeader'
+import { EmptyState } from '@/components/EmptyState'
 
 const ORDER_STATUSES: OrderStatus[] = [
   'New', 'Confirmed', 'No Answer', 'Wrong Number',
@@ -198,28 +200,10 @@ export default function OrdersPage() {
     <div className="fade-in" style={{ maxWidth: '1400px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
 
       {/* ── Page header ── */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold tracking-tight" style={{ color: 'var(--text-primary)' }}>Orders</h2>
-          <p className="text-sm mt-1" style={{ color: 'var(--text-secondary)' }}>
-            {loading ? 'Loading…' : `${orders.length} order${orders.length !== 1 ? 's' : ''} found`}
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={exportCSV}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all"
-            style={{
-              color: 'var(--text-secondary)',
-              border: '1px solid var(--border)',
-              background: 'var(--bg-surface)',
-              boxShadow: 'var(--shadow-xs)',
-            }}
-            onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--bg-muted)'; e.currentTarget.style.borderColor = 'var(--border-strong)' }}
-            onMouseLeave={(e) => { e.currentTarget.style.background = 'var(--bg-surface)'; e.currentTarget.style.borderColor = 'var(--border)' }}
-          >
-            <Download size={14} /> Export CSV
-          </button>
+      <PageHeader
+        title="Orders"
+        subtitle={loading ? 'Loading…' : `${orders.length} order${orders.length !== 1 ? 's' : ''} found`}
+        action={
           <button
             onClick={fetchOrders}
             className="flex items-center justify-center w-9 h-9 rounded-xl transition-all"
@@ -235,8 +219,24 @@ export default function OrdersPage() {
           >
             <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
           </button>
-        </div>
-      </div>
+        }
+        secondaryAction={
+          <button
+            onClick={exportCSV}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all"
+            style={{
+              color: 'var(--text-secondary)',
+              border: '1px solid var(--border)',
+              background: 'var(--bg-surface)',
+              boxShadow: 'var(--shadow-xs)',
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--bg-muted)'; e.currentTarget.style.borderColor = 'var(--border-strong)' }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = 'var(--bg-surface)'; e.currentTarget.style.borderColor = 'var(--border)' }}
+          >
+            <Download size={14} /> Export CSV
+          </button>
+        }
+      />
 
       {/* ── Filters card ── */}
       <div
@@ -371,17 +371,18 @@ export default function OrdersPage() {
             <p className="text-sm" style={{ color: 'var(--text-muted)' }}>Loading orders…</p>
           </div>
         ) : orders.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-24">
-            <div className="w-14 h-14 rounded-2xl mb-4 flex items-center justify-center" style={{ background: 'var(--bg-muted)' }}>
-              <ShoppingCart size={22} style={{ color: 'var(--text-muted)' }} />
-            </div>
-            <p className="text-sm font-semibold" style={{ color: 'var(--text-secondary)' }}>No orders found</p>
-            {hasFilters && (
-              <button onClick={clearFilters} className="mt-2 text-xs font-medium hover:opacity-70" style={{ color: 'var(--accent-text)' }}>
-                Clear filters
-              </button>
-            )}
-          </div>
+          <EmptyState
+            icon={ShoppingCart}
+            title="No orders found"
+            description={hasFilters ? "Try adjusting your filters or search query." : "You have no orders yet."}
+            action={
+              hasFilters ? (
+                <button onClick={clearFilters} className="text-xs font-medium hover:opacity-70" style={{ color: 'var(--accent-text)' }}>
+                  Clear filters
+                </button>
+              ) : undefined
+            }
+          />
         ) : (
           <div className="overflow-x-auto overflow-y-auto">
             <table className="w-full border-collapse">

@@ -11,6 +11,8 @@ import {
 } from 'lucide-react'
 import type { Order } from '@/types'
 import Link from 'next/link'
+import { PageHeader } from '@/components/PageHeader'
+import { EmptyState } from '@/components/EmptyState'
 
 function formatCurrency(value: number | null, currency = 'USD') {
   if (value === null) return '—'
@@ -129,24 +131,20 @@ export default async function DashboardPage() {
       <div style={{ display: 'flex', flexDirection: 'column', gap: '28px' }}>
 
         {/* ── Page header ───────────────────────────────────────────────────── */}
-        <div className="flex items-start justify-between flex-wrap gap-4">
-          <div>
-            <h2 className="text-2xl font-bold tracking-tight" style={{ color: 'var(--text-primary)' }}>
-              Good day 👋
-            </h2>
-            <p className="text-sm mt-1" style={{ color: 'var(--text-secondary)' }}>
-              {format(new Date(), 'EEEE, MMMM d, yyyy')} &mdash; here&apos;s your daily performance
-            </p>
-          </div>
-          <Link
-            href="/dashboard/orders"
-            className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold text-white flex-shrink-0 transition-opacity hover:opacity-90"
-            style={{ background: 'var(--accent)', boxShadow: '0 2px 8px rgba(37,99,235,0.3)' }}
-          >
-            <ShoppingCart size={15} />
-            View all orders
-          </Link>
-        </div>
+        <PageHeader
+          title="Good day 👋"
+          subtitle={`${format(new Date(), 'EEEE, MMMM d, yyyy')} — here's your daily performance`}
+          action={
+            <Link
+              href="/dashboard/orders"
+              className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold text-white flex-shrink-0 transition-opacity hover:opacity-90"
+              style={{ background: 'var(--accent)', boxShadow: '0 2px 8px rgba(37,99,235,0.3)' }}
+            >
+              <ShoppingCart size={15} />
+              View all orders
+            </Link>
+          }
+        />
 
         {/* ── Primary KPIs ──────────────────────────────────────────────────── */}
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
@@ -213,20 +211,11 @@ export default async function DashboardPage() {
             subtitle={`${productBreakdown.length} product${productBreakdown.length !== 1 ? 's' : ''} with orders today`}
           >
             {productBreakdown.length === 0 ? (
-              <div className="flex flex-col items-center py-8 text-center">
-                <div
-                  className="w-12 h-12 rounded-2xl mb-3 flex items-center justify-center"
-                  style={{ background: 'var(--bg-muted)' }}
-                >
-                  <Package2 size={20} style={{ color: 'var(--text-muted)' }} />
-                </div>
-                <p className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>
-                  No orders today yet
-                </p>
-                <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
-                  Breakdown will appear when orders arrive
-                </p>
-              </div>
+              <EmptyState
+                icon={Package2}
+                title="No orders today yet"
+                description="Breakdown will appear when orders arrive"
+              />
             ) : (
               <div className="flex flex-col gap-2">
                 {productBreakdown.map((p, i) => (
@@ -248,20 +237,11 @@ export default async function DashboardPage() {
             subtitle={`${lpBreakdown.length} page${lpBreakdown.length !== 1 ? 's' : ''} active today`}
           >
             {lpBreakdown.length === 0 ? (
-              <div className="flex flex-col items-center py-8 text-center">
-                <div
-                  className="w-12 h-12 rounded-2xl mb-3 flex items-center justify-center"
-                  style={{ background: 'var(--bg-muted)' }}
-                >
-                  <Star size={20} style={{ color: 'var(--text-muted)' }} />
-                </div>
-                <p className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>
-                  No landing page data yet
-                </p>
-                <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
-                  Breakdown will appear when orders arrive
-                </p>
-              </div>
+              <EmptyState
+                icon={Star}
+                title="No landing page data yet"
+                description="Breakdown will appear when orders arrive"
+              />
             ) : (
               <div className="flex flex-col gap-2">
                 {lpBreakdown.map((lp, i) => (

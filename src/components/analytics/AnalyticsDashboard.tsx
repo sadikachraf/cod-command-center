@@ -13,6 +13,7 @@ import {
   TH, TD, TD_STRONG, TD_NUM, RateCell, EmptyRow, fmt, pct, num,
 } from './AnalyticsUI'
 import { OrdersBarChart, RevenueLineChart } from './AnalyticsCharts'
+import { PageHeader } from '@/components/PageHeader'
 
 // ── Date range presets ────────────────────────────────────────────────────────
 type Preset = 'today' | 'yesterday' | '7d' | '30d' | 'custom'
@@ -131,12 +132,10 @@ export default function AnalyticsDashboard({ orders, products, lps }: Props) {
     <div className="fade-in" style={{ maxWidth: '1400px', display: 'flex', flexDirection: 'column', gap: '24px' }}>
 
       {/* ── Page header ── */}
-      <div>
-        <h2 className="text-2xl font-bold tracking-tight" style={{ color: 'var(--text-primary)' }}>Analytics</h2>
-        <p className="text-sm mt-1" style={{ color: 'var(--text-secondary)' }}>
-          Decision dashboard · {filtered.length} orders in selected period
-        </p>
-      </div>
+      <PageHeader
+        title="Analytics"
+        subtitle={`Decision dashboard · ${filtered.length} orders in selected period`}
+      />
 
       {/* ── Filters ── */}
       <div className="rounded-2xl" style={{

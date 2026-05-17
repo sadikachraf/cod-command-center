@@ -6,6 +6,8 @@ import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { StatusBadge } from '@/components/StatusBadge'
 import Modal from '@/components/Modal'
+import { PageHeader } from '@/components/PageHeader'
+import { EmptyState } from '@/components/EmptyState'
 import { Plus, Pencil, Trash2, Package, RefreshCw, TrendingUp } from 'lucide-react'
 import type { Product, ProductStatus } from '@/types'
 import { format } from 'date-fns'
@@ -143,27 +145,25 @@ export default function ProductsPage() {
     <div className="space-y-5 fade-in max-w-[1400px]">
 
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-lg font-bold" style={{ color: 'var(--text-primary)' }}>Products</h2>
-          <p className="text-sm mt-0.5" style={{ color: 'var(--text-secondary)' }}>
-            {products.length} product{products.length !== 1 ? 's' : ''}
-          </p>
-        </div>
-        <div className="flex gap-2">
+      <PageHeader
+        title="Products"
+        subtitle={`${products.length} product${products.length !== 1 ? 's' : ''}`}
+        action={
+          <button id="create-product-btn" onClick={openCreate}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-semibold text-white transition-opacity hover:opacity-90"
+            style={{ background: 'var(--accent)' }}>
+            <Plus size={15} /> New Product
+          </button>
+        }
+        secondaryAction={
           <button onClick={fetchAll} className="p-2 rounded-lg transition-all"
             style={{ color: 'var(--text-secondary)', border: '1px solid var(--border)', background: 'var(--bg-surface)' }}
             onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--bg-muted)' }}
             onMouseLeave={(e) => { e.currentTarget.style.background = 'var(--bg-surface)' }}>
             <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
           </button>
-          <button id="create-product-btn" onClick={openCreate}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-semibold text-white"
-            style={{ background: 'var(--accent)' }}>
-            <Plus size={15} /> New Product
-          </button>
-        </div>
-      </div>
+        }
+      />
 
       {/* Table */}
       <div className="rounded-xl overflow-hidden" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', boxShadow: 'var(--shadow-sm)' }}>
@@ -173,13 +173,16 @@ export default function ProductsPage() {
             <p className="text-sm" style={{ color: 'var(--text-muted)' }}>Loading products…</p>
           </div>
         ) : products.length === 0 ? (
-          <div className="py-24 text-center">
-            <Package size={36} className="mx-auto mb-3 opacity-20" style={{ color: 'var(--text-muted)' }} />
-            <p className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>No products yet</p>
-            <button onClick={openCreate} className="mt-2 text-xs font-medium" style={{ color: 'var(--accent-text)' }}>
-              Create your first product
-            </button>
-          </div>
+          <EmptyState
+            icon={Package}
+            title="No products yet"
+            description="Add your first product to start tracking performance."
+            action={
+              <button onClick={openCreate} className="text-xs font-medium transition-opacity hover:opacity-70" style={{ color: 'var(--accent-text)' }}>
+                Create your first product
+              </button>
+            }
+          />
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full">

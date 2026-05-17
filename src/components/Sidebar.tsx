@@ -18,8 +18,8 @@ const navGroups = [
   {
     label: '',
     items: [
-      { href: '/dashboard',               label: 'Dashboard',    icon: LayoutDashboard },
       { href: '/dashboard/orders',        label: 'Orders',       icon: ShoppingCart },
+      { href: '/dashboard',               label: 'Dashboard',    icon: LayoutDashboard },
     ],
   },
   {
