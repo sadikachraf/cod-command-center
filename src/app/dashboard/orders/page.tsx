@@ -5,7 +5,10 @@ export const dynamic = 'force-dynamic'
 import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { StatusBadge } from '@/components/StatusBadge'
-import { Search, RefreshCw, Filter, ChevronRight, Copy, Download, AlertTriangle, X, CheckSquare } from 'lucide-react'
+import {
+  Search, RefreshCw, Filter, ChevronRight, Copy,
+  Download, AlertTriangle, X, CheckSquare, ShoppingCart,
+} from 'lucide-react'
 import type { Order, OrderStatus, Product, LandingPage } from '@/types'
 import { format } from 'date-fns'
 import Link from 'next/link'
@@ -16,11 +19,11 @@ const ORDER_STATUSES: OrderStatus[] = [
   'New', 'Confirmed', 'No Answer', 'Wrong Number',
   'Cancelled', 'Shipped', 'Delivered', 'Returned', 'Paid',
 ]
-const DANGEROUS_BULK_STATUSES: OrderStatus[] = ['Cancelled', 'Returned', 'Delivered', 'Paid']
+const DANGEROUS_BULK: OrderStatus[] = ['Cancelled', 'Returned', 'Delivered', 'Paid']
 
-function formatCurrency(value: number | null, currency = 'USD') {
-  if (value === null) return '—'
-  return new Intl.NumberFormat('en-US', { style: 'currency', currency, maximumFractionDigits: 0 }).format(value)
+function formatCurrency(v: number | null, c = 'USD') {
+  if (v === null) return '—'
+  return new Intl.NumberFormat('en-US', { style: 'currency', currency: c, maximumFractionDigits: 0 }).format(v)
 }
 
 type OrderRow = Order & {
@@ -28,25 +31,40 @@ type OrderRow = Order & {
   landing_page: Pick<LandingPage, 'page_name'> | null
 }
 
-// Shared input/select style
-const inputCls = "px-3 py-1.5 rounded-lg text-sm transition-all focus:outline-none w-full"
-const inputSty = {
+// ── Shared control styles ──────────────────────────────────────────────────
+const ctrlBase: React.CSSProperties = {
   background: 'var(--bg-surface)',
   border: '1px solid var(--border)',
   color: 'var(--text-primary)',
+  borderRadius: '10px',
+  fontSize: '13px',
+  height: '36px',
+  padding: '0 12px',
+  width: '100%',
+  outline: 'none',
+  transition: 'border-color 0.15s, box-shadow 0.15s',
 }
-const focusSty = { borderColor: 'var(--accent)', boxShadow: '0 0 0 3px var(--accent-light)' }
-const blurSty  = { borderColor: 'var(--border)', boxShadow: 'none' }
+
+function onFocus(e: React.FocusEvent<HTMLInputElement | HTMLSelectElement>) {
+  e.target.style.borderColor = 'var(--accent)'
+  e.target.style.boxShadow = '0 0 0 3px rgba(37,99,235,0.12)'
+}
+function onBlur(e: React.FocusEvent<HTMLInputElement | HTMLSelectElement>) {
+  e.target.style.borderColor = 'var(--border)'
+  e.target.style.boxShadow = 'none'
+}
+
+// ── Column headers ──────────────────────────────────────────────────────────
+const TH_COLS = ['Order', 'Customer', 'Phone', 'City', 'Product', 'Value', 'Status', 'Date', '']
 
 export default function OrdersPage() {
   const supabase = createClient()
-  const [orders, setOrders]             = useState<OrderRow[]>([])
-  const [products, setProducts]         = useState<Pick<Product, 'id' | 'product_name'>[]>([])
-  const [landingPages, setLandingPages] = useState<Pick<LandingPage, 'id' | 'page_name'>[]>([])
-  const [loading, setLoading]           = useState(true)
-  const [copied, setCopied]             = useState<string | null>(null)
+  const [orders, setOrders]         = useState<OrderRow[]>([])
+  const [products, setProducts]     = useState<Pick<Product, 'id' | 'product_name'>[]>([])
+  const [lps, setLps]               = useState<Pick<LandingPage, 'id' | 'page_name'>[]>([])
+  const [loading, setLoading]       = useState(true)
+  const [copiedPhone, setCopied]    = useState<string | null>(null)
 
-  // Filters
   const [search, setSearch]         = useState('')
   const [statusFilter, setStatus]   = useState('')
   const [productFilter, setProduct] = useState('')
@@ -54,20 +72,19 @@ export default function OrdersPage() {
   const [dateFrom, setDateFrom]     = useState('')
   const [dateTo, setDateTo]         = useState('')
 
-  // Bulk
-  const [selected, setSelected]               = useState<string[]>([])
-  const [bulkStatus, setBulkStatus]           = useState<OrderStatus | ''>('')
-  const [isBulkUpdating, setIsBulkUpdating]   = useState(false)
-  const [bulkModalOpen, setBulkModalOpen]     = useState(false)
-  const [pendingBulkStatus, setPendingBulk]   = useState<OrderStatus | null>(null)
+  const [selected, setSelected]           = useState<string[]>([])
+  const [bulkStatus, setBulkStatus]       = useState<OrderStatus | ''>('')
+  const [bulkLoading, setBulkLoading]     = useState(false)
+  const [bulkModalOpen, setBulkModal]     = useState(false)
+  const [pendingBulk, setPendingBulk]     = useState<OrderStatus | null>(null)
 
   const fetchMeta = useCallback(async () => {
-    const [{ data: prods }, { data: lps }] = await Promise.all([
+    const [{ data: p }, { data: l }] = await Promise.all([
       supabase.from('products').select('id, product_name').order('product_name'),
       supabase.from('landing_pages').select('id, page_name').order('page_name'),
     ])
-    setProducts((prods ?? []) as typeof products)
-    setLandingPages((lps ?? []) as typeof landingPages)
+    setProducts((p ?? []) as typeof products)
+    setLps((l ?? []) as typeof lps)
   }, [supabase])
 
   const fetchOrders = useCallback(async () => {
@@ -93,10 +110,9 @@ export default function OrdersPage() {
         (o) =>
           o.customer_name.toLowerCase().includes(sq) ||
           o.phone.includes(sq) ||
-          o.order_number.toLowerCase().includes(sq)
+          o.order_number.toLowerCase().includes(sq),
       )
     }
-
     setOrders(rows)
     setSelected([])
     setLoading(false)
@@ -106,29 +122,25 @@ export default function OrdersPage() {
   useEffect(() => { fetchOrders() }, [fetchOrders])
 
   const hasFilters = !!(search || statusFilter || productFilter || lpFilter || dateFrom || dateTo)
-  const clearFilters = () => { setSearch(''); setStatus(''); setProduct(''); setLp(''); setDateFrom(''); setDateTo('') }
+  const clearFilters = () => {
+    setSearch(''); setStatus(''); setProduct(''); setLp(''); setDateFrom(''); setDateTo('')
+  }
 
-  // Selection
   const toggleOne = (id: string) =>
-    setSelected((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id])
+    setSelected((p) => p.includes(id) ? p.filter((x) => x !== id) : [...p, id])
   const toggleAll = () =>
     setSelected(selected.length === orders.length ? [] : orders.map((o) => o.id))
 
-  // Bulk status
   const handleBulkChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const s = e.target.value as OrderStatus
     setBulkStatus('')
-    if (!s || selected.length === 0) return
-    if (DANGEROUS_BULK_STATUSES.includes(s)) {
-      setPendingBulk(s)
-      setBulkModalOpen(true)
-    } else {
-      executeBulk(s)
-    }
+    if (!s || !selected.length) return
+    if (DANGEROUS_BULK.includes(s)) { setPendingBulk(s); setBulkModal(true) }
+    else executeBulk(s)
   }
 
   const executeBulk = async (newStatus: OrderStatus) => {
-    setIsBulkUpdating(true)
+    setBulkLoading(true)
     try {
       const { error } = await supabase.from('orders').update({ status: newStatus }).in('id', selected)
       if (error) throw error
@@ -141,39 +153,36 @@ export default function OrdersPage() {
           event_type: 'status_changed',
           event_data: { from: o.status, to: newStatus },
         }))
-      if (events.length > 0) await supabase.from('order_events').insert(events)
+      if (events.length) await supabase.from('order_events').insert(events)
       setSelected([])
       fetchOrders()
-    } catch { alert('Error updating orders') }
-    finally {
-      setIsBulkUpdating(false)
-      setBulkModalOpen(false)
-      setPendingBulk(null)
-    }
+    } catch { alert('Failed to update orders.') }
+    finally { setBulkLoading(false); setBulkModal(false); setPendingBulk(null) }
   }
 
-  // CSV export
   const exportCSV = () => {
-    if (orders.length === 0) return alert('No orders to export.')
-    const headers = ['order_number','created_at','status','product_name','landing_page_name','customer_name','phone','city','address','package_name','quantity','order_value','currency','notes','utm_source','utm_campaign','utm_content','platform','device','browser']
-    const esc = (v: any) => {
-      if (v === null || v === undefined) return ''
+    if (!orders.length) return alert('No orders to export.')
+    const headers = [
+      'order_number','created_at','status','product_name','landing_page_name',
+      'customer_name','phone','city','address','package_name','quantity',
+      'order_value','currency','notes','utm_source','utm_campaign','platform',
+    ]
+    const esc = (v: unknown) => {
+      if (v == null) return ''
       const s = String(v)
-      return (s.includes(',') || s.includes('"') || s.includes('\n')) ? `"${s.replace(/"/g, '""')}"` : s
+      return (s.includes(',') || s.includes('"') || s.includes('\n'))
+        ? `"${s.replace(/"/g, '""')}"` : s
     }
     const rows = orders.map((o) => [
       o.order_number, new Date(o.created_at).toISOString(), o.status,
       o.product?.product_name, o.landing_page?.page_name,
       o.customer_name, o.phone, o.city, o.address, o.package_name,
       o.quantity, o.order_value, o.currency, o.notes,
-      o.utm_source, o.utm_campaign, o.utm_content, o.platform, o.device, o.browser,
+      o.utm_source, o.utm_campaign, o.platform,
     ].map(esc).join(','))
     const csv = [headers.join(','), ...rows].join('\n')
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `orders_${format(new Date(), 'yyyyMMdd_HHmm')}.csv`
+    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8;' }))
+    const a = Object.assign(document.createElement('a'), { href: url, download: `orders_${format(new Date(), 'yyyyMMdd_HHmm')}.csv` })
     document.body.appendChild(a); a.click(); document.body.removeChild(a)
   }
 
@@ -184,124 +193,160 @@ export default function OrdersPage() {
     setTimeout(() => setCopied(null), 1500)
   }
 
-  // ─── Render ────────────────────────────────────────────────────────────────
+  // ── Render ────────────────────────────────────────────────────────────────
   return (
-    <div className="space-y-4 fade-in max-w-[1400px]">
+    <div className="fade-in" style={{ maxWidth: '1400px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
 
-      {/* Page header */}
+      {/* ── Page header ── */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-lg font-bold" style={{ color: 'var(--text-primary)' }}>Orders</h2>
-          <p className="text-sm mt-0.5" style={{ color: 'var(--text-secondary)' }}>
+          <h2 className="text-2xl font-bold tracking-tight" style={{ color: 'var(--text-primary)' }}>Orders</h2>
+          <p className="text-sm mt-1" style={{ color: 'var(--text-secondary)' }}>
             {loading ? 'Loading…' : `${orders.length} order${orders.length !== 1 ? 's' : ''} found`}
           </p>
         </div>
         <div className="flex items-center gap-2">
           <button
             onClick={exportCSV}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all"
-            style={{ color: 'var(--text-secondary)', border: '1px solid var(--border)', background: 'var(--bg-surface)' }}
-            onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'var(--border-strong)'; e.currentTarget.style.background = 'var(--bg-muted)' }}
-            onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.background = 'var(--bg-surface)' }}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all"
+            style={{
+              color: 'var(--text-secondary)',
+              border: '1px solid var(--border)',
+              background: 'var(--bg-surface)',
+              boxShadow: 'var(--shadow-xs)',
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--bg-muted)'; e.currentTarget.style.borderColor = 'var(--border-strong)' }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = 'var(--bg-surface)'; e.currentTarget.style.borderColor = 'var(--border)' }}
           >
-            <Download size={13} /> Export CSV
+            <Download size={14} /> Export CSV
           </button>
           <button
             onClick={fetchOrders}
-            className="flex items-center gap-1.5 p-1.5 rounded-lg transition-all"
-            style={{ color: 'var(--text-secondary)', border: '1px solid var(--border)', background: 'var(--bg-surface)' }}
+            className="flex items-center justify-center w-9 h-9 rounded-xl transition-all"
+            style={{
+              color: 'var(--text-secondary)',
+              border: '1px solid var(--border)',
+              background: 'var(--bg-surface)',
+              boxShadow: 'var(--shadow-xs)',
+            }}
             title="Refresh"
+            onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--bg-muted)' }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = 'var(--bg-surface)' }}
           >
             <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
           </button>
         </div>
       </div>
 
-      {/* Filters */}
+      {/* ── Filters card ── */}
       <div
-        className="rounded-xl p-4"
-        style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', boxShadow: 'var(--shadow-sm)' }}
+        className="rounded-2xl"
+        style={{
+          background: 'var(--bg-surface)',
+          border: '1px solid var(--border)',
+          boxShadow: 'var(--shadow-sm)',
+          padding: '16px 20px',
+        }}
       >
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
             <Filter size={13} style={{ color: 'var(--text-muted)' }} />
-            <span className="text-xs font-semibold" style={{ color: 'var(--text-secondary)' }}>Filters</span>
+            <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--text-secondary)' }}>
+              Filters
+            </span>
+            {hasFilters && (
+              <span
+                className="text-[10px] font-bold px-1.5 py-0.5 rounded-md"
+                style={{ background: 'var(--accent-light)', color: 'var(--accent-text)', border: '1px solid var(--accent-border)' }}
+              >
+                Active
+              </span>
+            )}
           </div>
           {hasFilters && (
             <button
               onClick={clearFilters}
-              className="flex items-center gap-1 text-xs font-medium transition-colors"
+              className="flex items-center gap-1 text-xs font-medium transition-opacity hover:opacity-70"
               style={{ color: 'var(--accent-text)' }}
             >
-              <X size={11} /> Clear
+              <X size={11} /> Clear all
             </button>
           )}
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5">
           {/* Search */}
-          <div className="col-span-2 sm:col-span-3 lg:col-span-2 relative">
-            <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: 'var(--text-muted)' }} />
+          <div className="col-span-2 relative">
+            <Search
+              size={13}
+              className="absolute pointer-events-none"
+              style={{ color: 'var(--text-muted)', left: '12px', top: '50%', transform: 'translateY(-50%)' }}
+            />
             <input
               type="text"
-              placeholder="Name, phone, order #…"
+              placeholder="Search name, phone, order…"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="pl-8 pr-3 py-1.5 rounded-lg text-sm focus:outline-none w-full"
-              style={inputSty}
-              onFocus={(e) => Object.assign(e.target.style, focusSty)}
-              onBlur={(e) => Object.assign(e.target.style, blurSty)}
+              style={{ ...ctrlBase, paddingLeft: '34px' }}
+              onFocus={onFocus}
+              onBlur={onBlur}
             />
           </div>
 
-          <select value={statusFilter} onChange={(e) => setStatus(e.target.value)} style={inputSty} className={inputCls}
-            onFocus={(e) => Object.assign(e.target.style, focusSty)} onBlur={(e) => Object.assign(e.target.style, blurSty)}>
+          <select value={statusFilter} onChange={(e) => setStatus(e.target.value)} style={ctrlBase} onFocus={onFocus} onBlur={onBlur}>
             <option value="">All statuses</option>
             {ORDER_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
           </select>
 
-          <select value={productFilter} onChange={(e) => setProduct(e.target.value)} style={inputSty} className={inputCls}
-            onFocus={(e) => Object.assign(e.target.style, focusSty)} onBlur={(e) => Object.assign(e.target.style, blurSty)}>
+          <select value={productFilter} onChange={(e) => setProduct(e.target.value)} style={ctrlBase} onFocus={onFocus} onBlur={onBlur}>
             <option value="">All products</option>
             {products.map((p) => <option key={p.id} value={p.id}>{p.product_name}</option>)}
           </select>
 
-          <select value={lpFilter} onChange={(e) => setLp(e.target.value)} style={inputSty} className={inputCls}
-            onFocus={(e) => Object.assign(e.target.style, focusSty)} onBlur={(e) => Object.assign(e.target.style, blurSty)}>
+          <select value={lpFilter} onChange={(e) => setLp(e.target.value)} style={ctrlBase} onFocus={onFocus} onBlur={onBlur}>
             <option value="">All pages</option>
-            {landingPages.map((lp) => <option key={lp.id} value={lp.id}>{lp.page_name}</option>)}
+            {lps.map((l) => <option key={l.id} value={l.id}>{l.page_name}</option>)}
           </select>
 
-          <div className="flex gap-1.5">
+          <div className="flex gap-2">
             <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)}
-              className="flex-1 px-2 py-1.5 rounded-lg text-xs focus:outline-none" style={inputSty}
-              onFocus={(e) => Object.assign(e.target.style, focusSty)} onBlur={(e) => Object.assign(e.target.style, blurSty)} />
+              style={{ ...ctrlBase, flex: 1, padding: '0 8px', fontSize: '12px' }}
+              onFocus={onFocus} onBlur={onBlur} />
             <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)}
-              className="flex-1 px-2 py-1.5 rounded-lg text-xs focus:outline-none" style={inputSty}
-              onFocus={(e) => Object.assign(e.target.style, focusSty)} onBlur={(e) => Object.assign(e.target.style, blurSty)} />
+              style={{ ...ctrlBase, flex: 1, padding: '0 8px', fontSize: '12px' }}
+              onFocus={onFocus} onBlur={onBlur} />
           </div>
         </div>
       </div>
 
-      {/* Bulk action bar */}
+      {/* ── Bulk bar ── */}
       {selected.length > 0 && (
         <div
-          className="rounded-xl px-4 py-2.5 flex items-center justify-between fade-in"
-          style={{ background: '#eff6ff', border: '1px solid var(--accent-border)' }}
+          className="flex items-center justify-between rounded-2xl px-5 py-3 fade-in"
+          style={{
+            background: 'var(--accent-light)',
+            border: '1px solid var(--accent-border)',
+            boxShadow: '0 2px 8px rgba(37,99,235,0.12)',
+          }}
         >
-          <div className="flex items-center gap-2">
-            <CheckSquare size={14} style={{ color: 'var(--accent)' }} />
-            <span className="text-sm font-medium" style={{ color: 'var(--accent-text)' }}>
+          <div className="flex items-center gap-3">
+            <CheckSquare size={16} style={{ color: 'var(--accent)' }} />
+            <span className="text-sm font-semibold" style={{ color: 'var(--accent-text)' }}>
               {selected.length} order{selected.length !== 1 ? 's' : ''} selected
             </span>
           </div>
-          <div className="flex items-center gap-2">
-            <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>Move to:</span>
+          <div className="flex items-center gap-3">
+            <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>Move to:</span>
             <select
               value={bulkStatus}
               onChange={handleBulkChange}
-              disabled={isBulkUpdating}
-              className="px-2.5 py-1 rounded-lg text-xs font-medium focus:outline-none"
-              style={{ ...inputSty, minWidth: '140px' }}
+              disabled={bulkLoading}
+              style={{
+                ...ctrlBase,
+                width: 'auto',
+                minWidth: '150px',
+                height: '34px',
+                borderColor: 'var(--accent-border)',
+              }}
             >
               <option value="">Select status…</option>
               {ORDER_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
@@ -310,27 +355,29 @@ export default function OrdersPage() {
         </div>
       )}
 
-      {/* Table */}
+      {/* ── Table card ── */}
       <div
-        className="rounded-xl overflow-hidden flex flex-col"
+        className="rounded-2xl overflow-hidden flex flex-col"
         style={{
           background: 'var(--bg-surface)',
           border: '1px solid var(--border)',
           boxShadow: 'var(--shadow-sm)',
-          maxHeight: '70vh',
+          maxHeight: '68vh',
         }}
       >
         {loading ? (
-          <div className="py-24 text-center">
-            <RefreshCw size={24} className="mx-auto mb-3 animate-spin" style={{ color: 'var(--text-muted)' }} />
+          <div className="flex flex-col items-center justify-center py-24">
+            <RefreshCw size={24} className="animate-spin mb-3" style={{ color: 'var(--text-muted)' }} />
             <p className="text-sm" style={{ color: 'var(--text-muted)' }}>Loading orders…</p>
           </div>
         ) : orders.length === 0 ? (
-          <div className="py-24 text-center">
-            <Search size={32} className="mx-auto mb-3 opacity-20" style={{ color: 'var(--text-muted)' }} />
-            <p className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>No orders found</p>
+          <div className="flex flex-col items-center justify-center py-24">
+            <div className="w-14 h-14 rounded-2xl mb-4 flex items-center justify-center" style={{ background: 'var(--bg-muted)' }}>
+              <ShoppingCart size={22} style={{ color: 'var(--text-muted)' }} />
+            </div>
+            <p className="text-sm font-semibold" style={{ color: 'var(--text-secondary)' }}>No orders found</p>
             {hasFilters && (
-              <button onClick={clearFilters} className="mt-2 text-xs font-medium" style={{ color: 'var(--accent-text)' }}>
+              <button onClick={clearFilters} className="mt-2 text-xs font-medium hover:opacity-70" style={{ color: 'var(--accent-text)' }}>
                 Clear filters
               </button>
             )}
@@ -338,20 +385,31 @@ export default function OrdersPage() {
         ) : (
           <div className="overflow-x-auto overflow-y-auto">
             <table className="w-full border-collapse">
-              <thead className="sticky top-0 z-10" style={{ background: 'var(--bg-surface-2)' }}>
-                <tr>
-                  <th className="px-4 py-3 text-left" style={{ borderBottom: '1px solid var(--border)' }}>
+              <thead className="sticky top-0 z-10">
+                <tr style={{ background: 'var(--bg-surface-2)', borderBottom: '1px solid var(--border)' }}>
+                  <th style={{ width: 44, padding: '12px 16px', borderBottom: '1px solid var(--border)' }}>
                     <input
                       type="checkbox"
                       checked={selected.length === orders.length && orders.length > 0}
                       onChange={toggleAll}
-                      className="rounded"
-                      style={{ accentColor: 'var(--accent)' }}
+                      style={{ accentColor: 'var(--accent)', cursor: 'pointer' }}
                     />
                   </th>
-                  {['Order #', 'Customer', 'Phone', 'City', 'Product', 'Page', 'Value', 'Status', 'Date', ''].map((h) => (
-                    <th key={h} className="px-4 py-3 text-left text-xs font-medium whitespace-nowrap"
-                      style={{ color: 'var(--text-muted)', borderBottom: '1px solid var(--border)' }}>
+                  {TH_COLS.map((h) => (
+                    <th
+                      key={h}
+                      className="text-left"
+                      style={{
+                        padding: '12px 16px',
+                        fontSize: '11px',
+                        fontWeight: 600,
+                        letterSpacing: '0.06em',
+                        textTransform: 'uppercase',
+                        color: 'var(--text-muted)',
+                        whiteSpace: 'nowrap',
+                        borderBottom: '1px solid var(--border)',
+                      }}
+                    >
                       {h}
                     </th>
                   ))}
@@ -362,87 +420,91 @@ export default function OrdersPage() {
                   <tr
                     key={order.id}
                     style={{ borderBottom: i < orders.length - 1 ? '1px solid var(--border)' : 'none' }}
-                    onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--bg-surface-2)' }}
+                    onMouseEnter={(e) => { e.currentTarget.style.background = '#F9FAFB' }}
                     onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
                   >
-                    <td className="px-4 py-3">
+                    <td style={{ padding: '14px 16px' }}>
                       <input
                         type="checkbox"
                         checked={selected.includes(order.id)}
                         onChange={() => toggleOne(order.id)}
-                        style={{ accentColor: 'var(--accent)' }}
-                        className="rounded"
+                        style={{ accentColor: 'var(--accent)', cursor: 'pointer' }}
                       />
                     </td>
-                    <td className="px-4 py-3">
+                    <td style={{ padding: '14px 16px' }}>
                       <Link
                         href={`/dashboard/orders/${order.id}`}
-                        className="text-xs font-mono font-semibold transition-colors"
+                        className="font-mono font-bold text-xs transition-opacity hover:opacity-70"
                         style={{ color: 'var(--accent-text)' }}
                       >
                         {order.order_number}
                       </Link>
                     </td>
-                    <td className="px-4 py-3">
+                    <td style={{ padding: '14px 16px' }}>
                       <Link
                         href={`/dashboard/orders/${order.id}`}
-                        className="text-sm font-medium transition-colors"
-                        style={{ color: 'var(--text-primary)' }}
+                        className="text-sm font-semibold transition-opacity hover:opacity-70"
+                        style={{ color: 'var(--text-primary)', display: 'block', maxWidth: '160px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
                       >
                         {order.customer_name}
                       </Link>
                     </td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-1.5 group">
+                    <td style={{ padding: '14px 16px' }}>
+                      <div className="flex items-center gap-2 group" style={{ minWidth: '110px' }}>
                         <span className="text-xs font-mono" style={{ color: 'var(--text-secondary)' }}>
                           {order.phone}
                         </span>
                         <button
                           onClick={(e) => copyPhone(order.phone, e)}
-                          className="opacity-0 group-hover:opacity-100 transition-opacity"
+                          className="opacity-0 group-hover:opacity-100 transition-opacity p-0.5 rounded"
                           title="Copy phone"
-                          style={{ color: copied === order.phone ? 'var(--success)' : 'var(--text-muted)' }}
+                          style={{ color: copiedPhone === order.phone ? 'var(--success)' : 'var(--text-muted)' }}
                         >
                           <Copy size={11} />
                         </button>
                       </div>
                     </td>
-                    <td className="px-4 py-3 text-xs" style={{ color: 'var(--text-secondary)' }}>{order.city}</td>
-                    <td className="px-4 py-3 text-xs whitespace-nowrap" style={{ color: 'var(--text-secondary)' }}>
-                      {order.product?.product_name ?? <span style={{ color: 'var(--text-muted)' }}>—</span>}
+                    <td style={{ padding: '14px 16px' }}>
+                      <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>{order.city}</span>
                     </td>
-                    <td className="px-4 py-3 text-xs whitespace-nowrap" style={{ color: 'var(--text-secondary)' }}>
-                      {order.landing_page?.page_name ?? <span style={{ color: 'var(--text-muted)' }}>—</span>}
+                    <td style={{ padding: '14px 16px' }}>
+                      <span className="text-sm" style={{ color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
+                        {order.product?.product_name ?? <span style={{ color: 'var(--text-muted)' }}>—</span>}
+                      </span>
                     </td>
-                    <td className="px-4 py-3 text-sm font-semibold whitespace-nowrap" style={{ color: 'var(--text-primary)' }}>
-                      {formatCurrency(order.order_value, order.currency)}
+                    <td style={{ padding: '14px 16px' }}>
+                      <span className="text-sm font-bold" style={{ color: 'var(--text-primary)', whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>
+                        {formatCurrency(order.order_value, order.currency)}
+                      </span>
                     </td>
-                    <td className="px-4 py-3">
+                    <td style={{ padding: '14px 16px' }}>
                       <QuickStatusSelect
                         orderId={order.id}
                         productId={order.product_id}
                         landingPageId={order.landing_page_id}
                         currentStatus={order.status}
-                        onStatusChange={(newStatus) =>
-                          setOrders(orders.map((o) => o.id === order.id ? { ...o, status: newStatus } : o))
+                        onStatusChange={(ns) =>
+                          setOrders(orders.map((o) => (o.id === order.id ? { ...o, status: ns } : o)))
                         }
                       />
                     </td>
-                    <td className="px-4 py-3 text-xs whitespace-nowrap" style={{ color: 'var(--text-muted)' }}>
-                      {format(new Date(order.created_at), 'MMM d, HH:mm')}
+                    <td style={{ padding: '14px 16px' }}>
+                      <span className="text-xs" style={{ color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
+                        {format(new Date(order.created_at), 'MMM d, HH:mm')}
+                      </span>
                     </td>
-                    <td className="px-4 py-3">
+                    <td style={{ padding: '14px 16px' }}>
                       <Link
                         href={`/dashboard/orders/${order.id}`}
-                        className="p-1.5 rounded-lg inline-flex transition-all"
+                        className="inline-flex items-center justify-center w-8 h-8 rounded-xl transition-all"
                         style={{ color: 'var(--text-muted)', border: '1px solid var(--border)' }}
                         onMouseEnter={(e) => {
-                          (e.currentTarget as HTMLElement).style.borderColor = 'var(--border-strong)'
-                          ;(e.currentTarget as HTMLElement).style.color = 'var(--text-secondary)'
+                          ;(e.currentTarget as HTMLElement).style.borderColor = 'var(--border-strong)'
+                          ;(e.currentTarget as HTMLElement).style.background = 'var(--bg-muted)'
                         }}
                         onMouseLeave={(e) => {
-                          (e.currentTarget as HTMLElement).style.borderColor = 'var(--border)'
-                          ;(e.currentTarget as HTMLElement).style.color = 'var(--text-muted)'
+                          ;(e.currentTarget as HTMLElement).style.borderColor = 'var(--border)'
+                          ;(e.currentTarget as HTMLElement).style.background = 'transparent'
                         }}
                       >
                         <ChevronRight size={13} />
@@ -456,33 +518,35 @@ export default function OrdersPage() {
         )}
       </div>
 
-      {/* Bulk confirm modal */}
-      <Modal isOpen={bulkModalOpen} onClose={() => setBulkModalOpen(false)} title="Confirm Bulk Update" size="sm">
-        <div className="flex flex-col items-center text-center space-y-4">
-          <div className="w-11 h-11 rounded-full flex items-center justify-center" style={{ background: 'var(--danger-light)', color: 'var(--danger)' }}>
-            <AlertTriangle size={20} />
+      {/* ── Bulk confirm modal ── */}
+      <Modal isOpen={bulkModalOpen} onClose={() => setBulkModal(false)} title="Confirm Bulk Update" size="sm">
+        <div className="flex flex-col items-center text-center gap-4">
+          <div
+            className="w-12 h-12 rounded-2xl flex items-center justify-center"
+            style={{ background: 'var(--danger-light)', color: 'var(--danger)' }}
+          >
+            <AlertTriangle size={22} />
           </div>
           <div>
-            <h3 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>Are you sure?</h3>
+            <h3 className="text-base font-semibold" style={{ color: 'var(--text-primary)' }}>Are you sure?</h3>
             <p className="text-sm mt-1" style={{ color: 'var(--text-secondary)' }}>
-              Mark <strong>{selected.length}</strong> order{selected.length !== 1 ? 's' : ''} as <strong>{pendingBulkStatus}</strong>?
+              Mark <strong>{selected.length}</strong> order{selected.length !== 1 ? 's' : ''} as{' '}
+              <strong>{pendingBulk}</strong>? This cannot be undone.
             </p>
           </div>
-          <div className="flex w-full gap-2.5 pt-2">
+          <div className="flex w-full gap-3 pt-1">
             <button
-              onClick={() => setBulkModalOpen(false)}
-              className="flex-1 py-2 rounded-lg text-sm font-medium"
+              onClick={() => setBulkModal(false)}
+              className="flex-1 py-2.5 rounded-xl text-sm font-semibold"
               style={{ background: 'var(--bg-muted)', color: 'var(--text-primary)', border: '1px solid var(--border)' }}
-            >
-              Cancel
-            </button>
+            >Cancel</button>
             <button
-              onClick={() => pendingBulkStatus && executeBulk(pendingBulkStatus)}
-              disabled={isBulkUpdating}
-              className="flex-1 py-2 rounded-lg text-sm font-medium text-white"
+              onClick={() => pendingBulk && executeBulk(pendingBulk)}
+              disabled={bulkLoading}
+              className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-white"
               style={{ background: 'var(--danger)' }}
             >
-              {isBulkUpdating ? 'Updating…' : 'Yes, update all'}
+              {bulkLoading ? 'Updating…' : 'Yes, update all'}
             </button>
           </div>
         </div>

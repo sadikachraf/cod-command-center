@@ -1,8 +1,8 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { Menu, LogOut, ChevronDown } from 'lucide-react'
+import { Menu, LogOut, ChevronDown, User } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 
 interface HeaderProps {
@@ -13,7 +13,19 @@ interface HeaderProps {
 export default function Header({ onMenuClick, title }: HeaderProps) {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
-  const [menuOpen, setMenuOpen] = useState(false)
+  const [open, setOpen] = useState(false)
+  const menuRef = useRef<HTMLDivElement>(null)
+
+  // Close on outside click
+  useEffect(() => {
+    function handler(e: MouseEvent) {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
 
   const handleSignOut = async () => {
     setLoading(true)
@@ -25,68 +37,86 @@ export default function Header({ onMenuClick, title }: HeaderProps) {
 
   return (
     <header
-      className="sticky top-0 z-20 flex items-center justify-between px-5"
+      className="sticky top-0 z-20 flex items-center justify-between"
       style={{
-        background: 'var(--bg-surface)',
+        background: 'rgba(255,255,255,0.92)',
+        backdropFilter: 'blur(12px)',
+        WebkitBackdropFilter: 'blur(12px)',
         borderBottom: '1px solid var(--border)',
-        height: '56px',
+        height: '64px',
+        paddingLeft: '24px',
+        paddingRight: '24px',
       }}
     >
-      {/* Left */}
-      <div className="flex items-center gap-3">
+      {/* Left side */}
+      <div className="flex items-center gap-4">
         <button
           onClick={onMenuClick}
-          className="lg:hidden p-1.5 rounded-lg transition-colors hover:bg-gray-100"
-          style={{ color: 'var(--text-secondary)' }}
+          className="lg:hidden w-9 h-9 rounded-xl flex items-center justify-center transition-colors"
+          style={{ color: 'var(--text-secondary)', background: 'var(--bg-muted)' }}
         >
           <Menu size={18} />
         </button>
-        <h1
-          className="text-sm font-semibold"
-          style={{ color: 'var(--text-primary)' }}
-        >
-          {title}
-        </h1>
+        <div>
+          <h1 className="text-[15px] font-semibold leading-tight" style={{ color: 'var(--text-primary)' }}>
+            {title}
+          </h1>
+        </div>
       </div>
 
-      {/* Right */}
-      <div className="flex items-center gap-2">
+      {/* Right side */}
+      <div className="flex items-center gap-2" ref={menuRef}>
         <div className="relative">
           <button
-            onClick={() => setMenuOpen(!menuOpen)}
-            className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-all"
+            onClick={() => setOpen(!open)}
+            className="flex items-center gap-2.5 pl-2.5 pr-3 py-2 rounded-xl text-sm transition-all"
             style={{
-              color: 'var(--text-secondary)',
               border: '1px solid var(--border)',
-              background: 'var(--bg-surface)',
+              background: open ? 'var(--bg-muted)' : 'var(--bg-surface)',
+              color: 'var(--text-primary)',
+              boxShadow: open ? 'none' : 'var(--shadow-xs)',
             }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.background = 'var(--bg-hover)'
-              e.currentTarget.style.borderColor = 'var(--border-strong)'
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.background = 'var(--bg-surface)'
-              e.currentTarget.style.borderColor = 'var(--border)'
-            }}
+            onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--bg-muted)' }}
+            onMouseLeave={(e) => { if (!open) e.currentTarget.style.background = 'var(--bg-surface)' }}
           >
-            <div className="w-5 h-5 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex-shrink-0" />
-            <span className="hidden sm:block text-xs">Admin</span>
-            <ChevronDown size={12} />
+            {/* Avatar */}
+            <div
+              className="w-6 h-6 rounded-lg flex items-center justify-center flex-shrink-0"
+              style={{ background: 'linear-gradient(135deg, #2563EB, #7C3AED)' }}
+            >
+              <User size={13} className="text-white" strokeWidth={2} />
+            </div>
+            <span className="hidden sm:block text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
+              Admin
+            </span>
+            <ChevronDown
+              size={13}
+              style={{
+                color: 'var(--text-muted)',
+                transform: open ? 'rotate(180deg)' : 'none',
+                transition: 'transform 0.15s',
+              }}
+            />
           </button>
 
-          {menuOpen && (
+          {open && (
             <div
-              className="absolute right-0 top-full mt-1.5 w-44 rounded-xl py-1 z-50 scale-in"
+              className="absolute right-0 mt-2 w-48 rounded-2xl py-1.5 z-50 slide-down"
               style={{
                 background: 'var(--bg-surface)',
                 border: '1px solid var(--border)',
                 boxShadow: 'var(--shadow-lg)',
+                top: '100%',
               }}
             >
+              <div className="px-4 py-2.5" style={{ borderBottom: '1px solid var(--border)' }}>
+                <p className="text-xs font-semibold" style={{ color: 'var(--text-primary)' }}>Admin</p>
+                <p className="text-xs" style={{ color: 'var(--text-muted)' }}>COD Command Center</p>
+              </div>
               <button
-                onClick={() => { setMenuOpen(false); handleSignOut() }}
+                onClick={() => { setOpen(false); handleSignOut() }}
                 disabled={loading}
-                className="flex items-center gap-2.5 w-full px-3 py-2 text-sm transition-colors text-left"
+                className="flex items-center gap-2.5 w-full px-4 py-2.5 text-sm font-medium transition-colors text-left mt-0.5"
                 style={{ color: 'var(--danger)' }}
                 onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--danger-light)' }}
                 onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}

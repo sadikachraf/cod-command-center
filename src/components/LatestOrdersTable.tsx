@@ -20,51 +20,84 @@ function formatCurrency(value: number | null, currency = 'USD') {
   }).format(value)
 }
 
+const COL_HEADERS = ['Order', 'Customer', 'Product', 'City', 'Value', 'Status', 'Date']
+
 export function LatestOrdersTable({ orders }: { orders: OrderRow[] }) {
   return (
     <div
-      className="rounded-xl overflow-hidden"
+      className="rounded-2xl overflow-hidden"
       style={{
         background: 'var(--bg-surface)',
         border: '1px solid var(--border)',
         boxShadow: 'var(--shadow-sm)',
       }}
     >
-      {/* Header */}
+      {/* Card header */}
       <div
-        className="px-5 py-3.5 flex items-center justify-between"
-        style={{ borderBottom: '1px solid var(--border)' }}
+        className="flex items-center justify-between"
+        style={{ padding: '18px 24px', borderBottom: '1px solid var(--border)' }}
       >
-        <h3 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
-          Recent Orders
-        </h3>
+        <div>
+          <h3 className="text-[15px] font-semibold" style={{ color: 'var(--text-primary)' }}>
+            Recent Orders
+          </h3>
+          <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
+            Last {orders.length} orders across all landing pages
+          </p>
+        </div>
         <Link
           href="/dashboard/orders"
-          className="flex items-center gap-1 text-xs font-medium transition-colors"
-          style={{ color: 'var(--accent-text)' }}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all"
+          style={{
+            color: 'var(--accent-text)',
+            background: 'var(--accent-light)',
+            border: '1px solid var(--accent-border)',
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.background = '#DBEAFE'
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.background = 'var(--accent-light)'
+          }}
         >
           View all <ArrowRight size={12} />
         </Link>
       </div>
 
+      {/* Empty state */}
       {orders.length === 0 ? (
-        <div className="py-16 text-center">
-          <Package size={36} className="mx-auto mb-3 opacity-20" style={{ color: 'var(--text-muted)' }} />
-          <p className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>No orders yet</p>
-          <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
-            Connect a landing page to start receiving orders
+        <div className="flex flex-col items-center justify-center py-20">
+          <div
+            className="w-14 h-14 rounded-2xl flex items-center justify-center mb-4"
+            style={{ background: 'var(--bg-muted)' }}
+          >
+            <Package size={24} style={{ color: 'var(--text-muted)' }} />
+          </div>
+          <p className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
+            No orders yet
+          </p>
+          <p className="text-xs mt-1 text-center max-w-xs" style={{ color: 'var(--text-muted)' }}>
+            Connect a landing page with an API key to start receiving orders
           </p>
         </div>
       ) : (
         <div className="overflow-x-auto">
-          <table className="w-full">
+          <table className="w-full border-collapse">
             <thead>
               <tr style={{ background: 'var(--bg-surface-2)', borderBottom: '1px solid var(--border)' }}>
-                {['Order #', 'Customer', 'Product', 'City', 'Value', 'Status', 'Time'].map((h) => (
+                {COL_HEADERS.map((h) => (
                   <th
                     key={h}
-                    className="px-4 py-2.5 text-left text-xs font-medium"
-                    style={{ color: 'var(--text-muted)' }}
+                    className="text-left"
+                    style={{
+                      padding: '10px 20px',
+                      fontSize: '11px',
+                      fontWeight: 600,
+                      letterSpacing: '0.06em',
+                      textTransform: 'uppercase',
+                      color: 'var(--text-muted)',
+                      whiteSpace: 'nowrap',
+                    }}
                   >
                     {h}
                   </th>
@@ -76,38 +109,51 @@ export function LatestOrdersTable({ orders }: { orders: OrderRow[] }) {
                 <tr
                   key={order.id}
                   className="transition-colors"
-                  style={{
-                    borderBottom: i < orders.length - 1 ? '1px solid var(--border)' : 'none',
-                  }}
-                  onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--bg-surface-2)' }}
+                  style={{ borderBottom: i < orders.length - 1 ? '1px solid var(--border)' : 'none' }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = '#F9FAFB' }}
                   onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
                 >
-                  <td className="px-4 py-3">
+                  <td style={{ padding: '14px 20px' }}>
                     <Link
                       href={`/dashboard/orders/${order.id}`}
-                      className="text-xs font-mono font-semibold transition-colors"
+                      className="font-mono font-bold text-xs transition-opacity hover:opacity-70"
                       style={{ color: 'var(--accent-text)' }}
                     >
                       {order.order_number}
                     </Link>
                   </td>
-                  <td className="px-4 py-3 text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
-                    {order.customer_name}
+                  <td style={{ padding: '14px 20px' }}>
+                    <span className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
+                      {order.customer_name}
+                    </span>
                   </td>
-                  <td className="px-4 py-3 text-xs" style={{ color: 'var(--text-secondary)' }}>
-                    {order.product?.product_name ?? '—'}
+                  <td style={{ padding: '14px 20px' }}>
+                    <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>
+                      {order.product?.product_name ?? (
+                        <span style={{ color: 'var(--text-muted)' }}>—</span>
+                      )}
+                    </span>
                   </td>
-                  <td className="px-4 py-3 text-xs" style={{ color: 'var(--text-secondary)' }}>
-                    {order.city}
+                  <td style={{ padding: '14px 20px' }}>
+                    <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>
+                      {order.city}
+                    </span>
                   </td>
-                  <td className="px-4 py-3 text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
-                    {formatCurrency(order.order_value, order.currency)}
+                  <td style={{ padding: '14px 20px' }}>
+                    <span
+                      className="text-sm font-bold"
+                      style={{ color: 'var(--text-primary)', fontVariantNumeric: 'tabular-nums' }}
+                    >
+                      {formatCurrency(order.order_value, order.currency)}
+                    </span>
                   </td>
-                  <td className="px-4 py-3">
+                  <td style={{ padding: '14px 20px' }}>
                     <StatusBadge status={order.status as OrderStatus} type="order" />
                   </td>
-                  <td className="px-4 py-3 text-xs" style={{ color: 'var(--text-muted)' }}>
-                    {format(new Date(order.created_at), 'MMM d, HH:mm')}
+                  <td style={{ padding: '14px 20px' }}>
+                    <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                      {format(new Date(order.created_at), 'MMM d, HH:mm')}
+                    </span>
                   </td>
                 </tr>
               ))}

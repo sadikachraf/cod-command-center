@@ -14,11 +14,7 @@ const pageTitles: Record<string, string> = {
   '/dashboard/settings': 'Settings',
 }
 
-export default function DashboardLayout({
-  children,
-}: {
-  children: React.ReactNode
-}) {
+export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const pathname = usePathname()
 
@@ -31,10 +27,12 @@ export default function DashboardLayout({
     <div className="flex h-screen overflow-hidden" style={{ background: 'var(--bg-app)' }}>
       <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
 
-      {/* Main */}
       <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
         <Header onMenuClick={() => setSidebarOpen(true)} title={title} />
-        <main className="flex-1 overflow-y-auto p-5 lg:p-6">
+        <main
+          className="flex-1 overflow-y-auto"
+          style={{ padding: '28px 32px' }}
+        >
           {children}
         </main>
       </div>
